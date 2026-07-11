@@ -11,7 +11,8 @@ export function mountHub(container) {
   const tagsHtml = (g) =>
     (g.tags || []).map((t) => `<span class="tag">${t}</span>`).join('');
 
-  const featured = games.find((g) => g.featured) || games[0];
+  // 추천 게임: 허브를 열 때마다 라이브러리에서 랜덤으로 하나 선택
+  const featured = games[Math.floor(Math.random() * games.length)] || games[0];
 
   const heroHtml = featured
     ? `<section class="hero" style="--accent:${featured.accent || '#4f8cff'}">

@@ -5,7 +5,6 @@
 //   tagline  : 히어로 배너용 한 줄 소개
 //   tags     : 장르/특징 태그 배열
 //   accent   : 대표 색 (커버/버튼 강조)
-//   featured : true면 상단 히어로 배너에 노출
 //   cover    : (uid) => SVG 문자열. 카드/히어로 커버 아트 (외부 이미지 없이 자체 생성)
 //   load     : 동적 import. 반환 모듈은 mount(container) 를 export 해야 함
 export const games = [
@@ -16,7 +15,6 @@ export const games = [
     tagline: '슬라이딩 블록 퍼즐의 고전. 막힌 판에서 큰 말을 출구로 밀어내세요.',
     tags: ['퍼즐', '싱글', '터치'],
     accent: '#e0563f',
-    featured: true,
     cover: khunphanCover,
     load: () => import('./khunphan/index.js'),
   },
