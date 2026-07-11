@@ -346,6 +346,41 @@ button.toggle.active {
   align-items: flex-end;
   pointer-events: none;
 }
+
+/* ---------- mining D-pad ---------- */
+.dpad {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(16px + var(--safe-bottom));
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(3, 58px);
+  gap: 6px;
+  z-index: 2;
+  touch-action: none;
+}
+.dpad .pad {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 36, 48, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 22px;
+  backdrop-filter: blur(4px);
+  touch-action: none;
+  user-select: none;
+}
+.dpad .up { grid-column: 2; grid-row: 1; }
+.dpad .left { grid-column: 1; grid-row: 2; }
+.dpad .right { grid-column: 3; grid-row: 2; }
+.dpad .down { grid-column: 2; grid-row: 3; }
+.dpad .pad.active {
+  background: rgba(79, 140, 255, 0.85);
+  transform: scale(0.94);
+}
 .lander-controls .ctrl {
   pointer-events: auto;
   width: 74px;

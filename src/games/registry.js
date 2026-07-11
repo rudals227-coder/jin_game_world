@@ -38,6 +38,16 @@ export const games = [
     cover: landerCover,
     load: () => import('./lander/index.js'),
   },
+  {
+    id: 'mining',
+    title: '광산 채굴',
+    desc: '미로를 탐험하며 보석을 캐자.',
+    tagline: '동굴 미로에서 몬스터를 피해 보석을 캐고, 다이너마이트로 역공하세요.',
+    tags: ['아케이드', '미로', '터치'],
+    accent: '#7ff0ff',
+    cover: miningCover,
+    load: () => import('./mining/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -172,6 +182,43 @@ function landerCover(uid = 'l') {
       <line x1="11" y1="8" x2="16" y2="18" stroke="#c8d0dd" stroke-width="2.5"/>
       <ellipse cx="0" cy="0" rx="12" ry="10" fill="#dfe6f0"/>
       <circle cx="0" cy="-1" r="5" fill="#4dabf7"/>
+    </g>
+  </svg>`;
+}
+
+// 광산 채굴: 어두운 동굴 격자 + 보석 + 광부(팩맨풍) + 몬스터.
+function miningCover(uid = 'm') {
+  const W = 400;
+  const H = 240;
+  // 격자 벽 블록 몇 개
+  let walls = '';
+  const blocks = [[40, 60], [120, 60], [280, 60], [40, 150], [200, 150], [320, 150], [120, 150]];
+  for (const [x, y] of blocks) {
+    walls += `<rect x="${x}" y="${y}" width="40" height="40" rx="7" fill="#333c52"/>`;
+  }
+  // 보석 몇 개
+  let gems = '';
+  for (const [x, y] of [[90, 120], [250, 110], [340, 60]]) {
+    gems += `<path d="M${x},${y - 9} L${x + 7},${y} L${x},${y + 9} L${x - 7},${y} Z" fill="#7ff0ff"/>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="mbg-${uid}" cx="50%" cy="45%" r="75%">
+        <stop offset="0" stop-color="#141a26"/>
+        <stop offset="1" stop-color="#080a10"/>
+      </radialGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#mbg-${uid})"/>
+    ${walls}
+    ${gems}
+    <!-- 몬스터 -->
+    <g transform="translate(300,120)">
+      <path d="M-15,4 A15,15 0 0 1 15,4 L15,15 L8,10 L0,15 L-8,10 L-15,15 Z" fill="#ff5a5a"/>
+      <circle cx="-6" cy="0" r="4" fill="#fff"/><circle cx="6" cy="0" r="4" fill="#fff"/>
+    </g>
+    <!-- 광부(팩맨풍) -->
+    <g transform="translate(150,120)">
+      <path d="M0,0 L18,-11 A21,21 0 1 0 18,11 Z" fill="#ffd24a"/>
     </g>
   </svg>`;
 }

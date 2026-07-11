@@ -68,6 +68,10 @@ export function mount(container) {
 
 물리 + **온스크린 조종 버튼** 예제. 중력/분사/회전/연료 물리, 지형·착륙장 생성, 착륙/추락 판정. 조작은 `.game-stage` 위에 절대배치한 버튼 3개(`.lander-controls`, pointerdown/up로 입력 플래그 토글)와 PC 키보드(방향키/스페이스, window 리스너)를 병행 — 새 게임에서 터치 버튼 UI가 필요할 때 참고. 지속 사운드는 `engine/audio.js`의 `startThrust/stopThrust`(노이즈 루프). unmount에서 window 키 리스너와 분사음 정리 필수.
 
+### 참조 구현: 광산 채굴(`src/games/mining/`)
+
+팩맨 스타일 격자 미로 게임. `maze.js`(순수 모델: 타일 상수·ASCII 레벨 파싱·`passable`/`isDiggable`/`collectAt`/`dig`/`gemsRemaining`)와 `index.js`(뷰) 분리. 이동은 **격자 정렬 + 방향 버퍼링**: 엔티티는 셀 단위 float 좌표로 인접 셀 중심(`target`)을 향해 이동, 중심 도달 시에만 방향 재결정(`want`). 몬스터 AI는 교차로에서 그리디(추적)/랜덤(배회), 후진 금지. 조작은 `.dpad`(십자, styles.css) — pointerdown으로 `want` 설정(누른 방향 유지) + 키보드. 벽 파기(`%`)가 팩맨 대비 차별 기능.
+
 ## iPad Safari 규약 (전 게임 공통)
 
 - `index.html` viewport 메타로 핀치/더블탭 줌 차단, `viewport-fit=cover`로 노치 영역 활용.
