@@ -18,6 +18,7 @@ import { canPlace, place, removeAt, validateLayout } from './editor.js';
 import {
   classicLayout,
   emptyLayout,
+  randomLayout,
   loadCustomLevels,
   saveCustomLevel,
 } from './levels.js';
@@ -87,16 +88,20 @@ export function mount(container) {
     topbar.append(spacer, createMuteButton());
 
     if (state.mode === 'play') {
-      // 문제 선택 (기본 + 저장된 커스텀)
+      topbar.append(button('🎲 새 문제', newRandomPuzzle, 'primary'));
+      topbar.append(button('다시 시작', resetPlay));
+      // 특정 문제 불러오기 (기본 + 저장된 커스텀). 고르면 로드 후 다시 안내문으로 복귀.
       const select = document.createElement('select');
-      const optClassic = new Option('기본 문제', 'classic');
-      select.add(optClassic);
+      select.add(new Option('불러오기…', ''));
+      select.add(new Option('기본 문제(횡도입마)', 'classic'));
       for (const lvl of loadCustomLevels()) {
         select.add(new Option(lvl.name, lvl.id));
       }
-      select.addEventListener('change', () => loadLevel(select.value));
+      select.addEventListener('change', () => {
+        if (select.value) loadLevel(select.value);
+        select.value = '';
+      });
       topbar.append(select);
-      topbar.append(button('다시 시작', resetPlay));
     } else {
       topbar.append(button('기본 배치', () => loadEditor(classicLayout())));
       topbar.append(button('전체 지우기', () => loadEditor(emptyLayout())));
@@ -113,8 +118,8 @@ export function mount(container) {
     }
     if (state.mode === 'play') {
       hint.textContent = state.solved
-        ? '🎉 클리어! 큰 말이 출구로 나왔어요.'
-        : '피스를 드래그해 빈 칸으로 미세요. 큰 말을 하단 출구로.';
+        ? '🎉 클리어! 큰 말이 출구로 나왔어요. (🎲 새 문제로 계속)'
+        : '피스를 드래그해 빈 칸으로 미세요 · 🎲 새 문제(랜덤) / 다시 시작(같은 문제).';
     } else {
       const names = KIND_ORDER.map(
         (k) => (k === state.editorKind ? `【${KINDS[k].label}】` : KINDS[k].label)
@@ -164,6 +169,15 @@ export function mount(container) {
         : (loadCustomLevels().find((l) => l.id === value)?.pieces ?? classicLayout());
     state.base = clonePieces(layout);
     resetPlay();
+  }
+
+  // 랜덤(항상 풀 수 있는) 새 문제 로드
+  function newRandomPuzzle() {
+    state.mode = 'play';
+    state.base = clonePieces(randomLayout());
+    resetPlay();
+    renderTopbar();
+    renderPalette();
   }
 
   function resetPlay() {
@@ -493,6 +507,9 @@ export function mount(container) {
   const loop = createLoop(draw);
 
   // ----- 초기화 -----
+  // 진입은 기본 문제로 즉시(플레이 가능). 랜덤은 🎲 새 문제 버튼으로 (풀 생성은 1회성).
+  state.base = clonePieces(classicLayout());
+  state.pieces = clonePieces(state.base);
   renderTopbar();
   renderPalette();
   renderHint();
