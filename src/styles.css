@@ -332,13 +332,19 @@ button.toggle.active {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(14px + var(--safe-bottom));
+  bottom: calc(18px + var(--safe-bottom));
   display: flex;
-  justify-content: center;
-  gap: 14px;
+  justify-content: space-between; /* 왼쪽=분사, 오른쪽=기울이기 */
+  align-items: flex-end;
   pointer-events: none; /* 컨테이너는 통과, 버튼만 입력 받음 */
-  padding: 0 16px;
+  padding: 0 calc(18px + var(--safe-right)) 0 calc(18px + var(--safe-left));
   z-index: 2; /* 캔버스 위에 표시 */
+}
+.lander-controls .ctrl-group {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  pointer-events: none;
 }
 .lander-controls .ctrl {
   pointer-events: auto;

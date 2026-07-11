@@ -381,11 +381,16 @@ export function mount(container) {
   }
 
   // ----- 조종 버튼 (터치) -----
+  // 왼쪽 아래 = 불뿜기(분사), 오른쪽 아래 = 기울이기(◀▶). 양손 조작.
   const controls = el('div', 'lander-controls');
-  const btnLeft = ctrlButton('◀', (v) => (S.input.left = v));
+  const leftGroup = el('div', 'ctrl-group');
+  const rightGroup = el('div', 'ctrl-group');
   const btnThrust = ctrlButton('🔥', (v) => (S.input.thrust = v), 'thrust');
+  const btnLeft = ctrlButton('◀', (v) => (S.input.left = v));
   const btnRight = ctrlButton('▶', (v) => (S.input.right = v));
-  controls.append(btnLeft, btnThrust, btnRight);
+  leftGroup.append(btnThrust);
+  rightGroup.append(btnLeft, btnRight);
+  controls.append(leftGroup, rightGroup);
   stage.append(controls);
 
   function ctrlButton(label, setFlag, extra) {
