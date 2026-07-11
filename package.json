@@ -1,0 +1,14 @@
+{
+  "name": "jin-game-world",
+  "version": "0.1.0",
+  "description": "여러 미니게임을 모아놓은 허브형 웹앱 (바닐라 JS + Canvas, iPad 플레이)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

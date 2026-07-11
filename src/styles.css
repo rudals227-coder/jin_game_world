@@ -1,0 +1,372 @@
+/* ---------- reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0e1116;
+  --surface: #191d26;
+  --surface-2: #232834;
+  --text: #e7ebf2;
+  --muted: #8b93a3;
+  --accent: #4f8cff;
+  --accent-strong: #2f6bff;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR",
+    sans-serif;
+  /* iPad: 당겨서 새로고침 / 바운스 스크롤 방지 */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  min-height: 100%;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* ---------- shared buttons ---------- */
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:active {
+  transform: translateY(1px);
+}
+button.primary {
+  background: var(--accent-strong);
+}
+button.toggle.active {
+  background: var(--accent-strong);
+  border-color: var(--accent);
+}
+
+/* ---------- hub (Steam 스타일 라이브러리) ---------- */
+.hub {
+  --accent: #4f8cff;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 20px 64px;
+}
+/* 페이지 배경: 은은한 컬러 글로우 (검은 단색 탈피) */
+.hub::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60% 50% at 12% 0%, rgba(224, 86, 63, 0.2), transparent 60%),
+    radial-gradient(55% 45% at 100% 12%, rgba(79, 140, 255, 0.18), transparent 60%),
+    radial-gradient(70% 60% at 50% 108%, rgba(58, 166, 160, 0.14), transparent 60%),
+    #0a0d13;
+}
+
+/* header */
+.hub-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 6px 4px 22px;
+}
+.brand {
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.brand-mark {
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px rgba(79, 140, 255, 0.6));
+}
+.brand-sub {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+
+/* hero (추천 배너) */
+.hero {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 300px;
+  display: flex;
+  align-items: flex-end;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  margin-bottom: 36px;
+}
+.hero-art {
+  position: absolute;
+  inset: 0;
+}
+.hero-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* 텍스트 가독성용 어두운 그라데이션 */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 13, 0.94) 0%, rgba(7, 9, 13, 0.6) 42%, rgba(7, 9, 13, 0.05) 78%),
+    linear-gradient(0deg, rgba(7, 9, 13, 0.9), transparent 55%);
+}
+.hero-body {
+  position: relative;
+  z-index: 1;
+  padding: 34px;
+  max-width: 560px;
+}
+.hero-badge {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  padding: 5px 11px;
+  border-radius: 20px;
+  margin-bottom: 14px;
+}
+.hero-title {
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 10px;
+}
+.hero-desc {
+  color: #c7cedb;
+  font-size: 15px;
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+.hero-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.btn-play {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.18)), var(--accent);
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 13px 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* tag pill (공용) */
+.tag {
+  font-size: 12px;
+  color: #dfe5ef;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 5px 11px;
+  border-radius: 20px;
+}
+
+/* library grid */
+.lib-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 4px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lib-title::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+.game-card {
+  --accent: #4f8cff;
+  background: #141922;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.game-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.55);
+}
+.game-card:active {
+  transform: scale(0.98);
+}
+.card-cover {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+}
+.card-cover svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 14, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.card-play span {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 3px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+.game-card:hover .card-play {
+  opacity: 1;
+}
+.card-info {
+  padding: 12px 14px 15px;
+}
+.card-name {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 9px;
+}
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.card-tags .tag {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+/* ---------- game screen ---------- */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  /* 게임 화면 안에서는 모든 기본 터치 제스처(더블탭/핀치 확대, 스크롤) 차단 */
+  touch-action: none;
+}
+.game-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.game-topbar .spacer {
+  flex: 1;
+}
+.game-stage {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 게임 캔버스: 브라우저 기본 터치 제스처 차단 (드래그 조작을 위해) */
+.game-stage canvas {
+  touch-action: none;
+  display: block;
+}
+.game-hint {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 6px 14px calc(6px + var(--safe-bottom));
+}
+
+/* ---------- lander 조종 버튼 ---------- */
+.lander-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(14px + var(--safe-bottom));
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none; /* 컨테이너는 통과, 버튼만 입력 받음 */
+  padding: 0 16px;
+  z-index: 2; /* 캔버스 위에 표시 */
+}
+.lander-controls .ctrl {
+  pointer-events: auto;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(30, 36, 48, 0.72);
+  color: #fff;
+  font-size: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  touch-action: none;
+  user-select: none;
+}
+.lander-controls .ctrl.thrust {
+  width: 90px;
+  height: 90px;
+  font-size: 32px;
+  background: rgba(224, 120, 60, 0.75);
+  border-color: rgba(255, 200, 150, 0.4);
+}
+.lander-controls .ctrl.active {
+  background: rgba(79, 140, 255, 0.85);
+  transform: scale(0.94);
+}
+.lander-controls .ctrl.thrust.active {
+  background: rgba(255, 150, 70, 0.95);
+}
