@@ -211,14 +211,26 @@ function miningCover(uid = 'm') {
     <rect width="${W}" height="${H}" fill="url(#mbg-${uid})"/>
     ${walls}
     ${gems}
-    <!-- 몬스터 -->
-    <g transform="translate(300,120)">
-      <path d="M-15,4 A15,15 0 0 1 15,4 L15,15 L8,10 L0,15 L-8,10 L-15,15 Z" fill="#ff5a5a"/>
-      <circle cx="-6" cy="0" r="4" fill="#fff"/><circle cx="6" cy="0" r="4" fill="#fff"/>
+    <!-- 귀여운 몬스터 (외눈+뿔) -->
+    <g transform="translate(300,116)">
+      <polygon points="-9,-13 -3,-24 -1,-11" fill="#d84a3a"/>
+      <polygon points="9,-13 3,-24 1,-11" fill="#d84a3a"/>
+      <circle cx="0" cy="0" r="17" fill="#ff6b5a"/>
+      <circle cx="0" cy="-2" r="8.5" fill="#fff"/>
+      <circle cx="0" cy="-2" r="4" fill="#1a2233"/>
+      <ellipse cx="0" cy="11" rx="6" ry="3.5" fill="#7a1f1f"/>
     </g>
-    <!-- 광부(팩맨풍) -->
-    <g transform="translate(150,120)">
-      <path d="M0,0 L18,-11 A21,21 0 1 0 18,11 Z" fill="#ffd24a"/>
+    <!-- 곡괭이 든 광부 -->
+    <g transform="translate(150,116)">
+      <g transform="translate(15,2) rotate(18)">
+        <rect x="-2" y="-26" width="4" height="30" rx="2" fill="#8a5a2b"/>
+        <path d="M-13,-24 Q0,-33 13,-24" stroke="#cfd6e0" stroke-width="4" fill="none"/>
+      </g>
+      <rect x="-13" y="-2" width="26" height="26" rx="7" fill="#3f6fb0"/>
+      <circle cx="0" cy="-11" r="13" fill="#f0c69a"/>
+      <path d="M-15,-11 A15,15 0 0 1 15,-11 Z" fill="#ffcc33"/>
+      <rect x="-16" y="-13" width="32" height="4.5" rx="2" fill="#ffcc33"/>
+      <circle cx="9" cy="-14" r="3" fill="#fff6c0"/>
     </g>
   </svg>`;
 }

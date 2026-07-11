@@ -88,10 +88,20 @@ export function mount(container) {
     S.frightTimer = 0;
   }
 
-  function setWant(dir) {
+  // 누르는 동안만 이동: 눌린 방향 스택(held). 떼면 마지막 남은 방향, 없으면 정지.
+  const held = [];
+  function pressDir(dir) {
     if (!S.player) return;
+    held.push(dir);
     S.player.want = { ...dir };
     if (S.mode === 'ready') { S.mode = 'playing'; updateHint(); }
+  }
+  function releaseDir(dir) {
+    for (let i = held.length - 1; i >= 0; i--) {
+      if (held[i].x === dir.x && held[i].y === dir.y) { held.splice(i, 1); break; }
+    }
+    const top = held[held.length - 1];
+    if (S.player) S.player.want = top ? { ...top } : { x: 0, y: 0 };
   }
 
   // ----- 워프 -----
@@ -178,17 +188,12 @@ export function mount(container) {
   }
 
   function decidePlayer(c, r) {
-    const p = S.player;
-    const w = p.want;
+    // 누르는 동안만(want) 이동. 손을 떼면 want=0 → 정지.
+    const w = S.player.want;
     if (w.x || w.y) {
       const nc = c + w.x, nr = r + w.y;
       if (passable(S.grid, nc, nr)) return { dir: { ...w } };
       if (isDiggable(S.grid, nc, nr)) return { dig: { c: nc, r: nr } };
-    }
-    const d = p.dir;
-    if (d.x || d.y) {
-      const nc = c + d.x, nr = r + d.y;
-      if (passable(S.grid, nc, nr)) return { dir: { ...d } };
     }
     return {};
   }
@@ -479,38 +484,89 @@ export function mount(container) {
     ctx.restore();
   }
 
+  // 귀여운 몬스터: 추적형=빨강 외눈+뿔, 배회형=청록 두눈+더듬이. 겁먹으면 파랑.
   function drawMonster(ctx, m, g) {
     const { cell, ox, oy } = g;
     const cx = ox + (m.px + 0.5) * cell;
     const cy = oy + (m.py + 0.5) * cell;
-    const r = cell * 0.4;
-    let color = m.type === 'chase' ? '#ff5a5a' : '#57d977';
+    const r = cell * 0.44;
+    const chase = m.type === 'chase';
+    let body = chase ? '#ff6b5a' : '#3fb6a8';
+    let dark = chase ? '#d84a3a' : '#2c8f84';
     if (m.mode === 'fright') {
-      // 끝나갈 때 깜빡임
       const blink = S.frightTimer < 2 && Math.floor(S.frightTimer * 6) % 2 === 0;
-      color = blink ? '#dfe6ff' : '#4d6bff';
+      body = blink ? '#e6ebff' : '#5570ff';
+      dark = blink ? '#c3cdf0' : '#3a52d6';
     }
-    if (m.cooldown > 0) color = 'rgba(160,170,200,0.4)';
-    // 몸통 (반원 + 물결 밑단)
-    ctx.beginPath();
-    ctx.arc(cx, cy - r * 0.1, r, Math.PI, 0);
-    ctx.lineTo(cx + r, cy + r * 0.7);
-    for (let i = 0; i < 3; i++) {
-      const xx = cx + r - ((i + 0.5) / 3) * 2 * r;
-      ctx.lineTo(xx, cy + r * 0.4);
-      const xx2 = cx + r - ((i + 1) / 3) * 2 * r;
-      ctx.lineTo(xx2, cy + r * 0.7);
+    if (m.cooldown > 0) { body = 'rgba(150,160,190,0.4)'; dark = 'rgba(150,160,190,0.4)'; }
+
+    const wob = Math.sin(S.anim * 6 + m.px * 1.3) * r * 0.06; // 통통 튀는 느낌
+    ctx.save();
+    ctx.translate(cx, cy + wob);
+
+    // 뿔(추적형) / 더듬이(배회형)
+    if (m.mode !== 'fright' && m.cooldown <= 0) {
+      if (chase) {
+        ctx.fillStyle = dark;
+        tri(ctx, -r * 0.55, -r * 0.5, -r * 0.18, -r * 1.15, -r * 0.05, -r * 0.6);
+        tri(ctx, r * 0.55, -r * 0.5, r * 0.18, -r * 1.15, r * 0.05, -r * 0.6);
+      } else {
+        ctx.strokeStyle = dark;
+        ctx.lineWidth = Math.max(1.5, r * 0.1);
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-r * 0.3, -r * 0.75); ctx.lineTo(-r * 0.5, -r * 1.2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(r * 0.3, -r * 0.75); ctx.lineTo(r * 0.5, -r * 1.2); ctx.stroke();
+        drawDot(ctx, -r * 0.5, -r * 1.22, r * 0.13, dark);
+        drawDot(ctx, r * 0.5, -r * 1.22, r * 0.13, dark);
+      }
     }
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
+
+    // 팔
+    ctx.strokeStyle = body;
+    ctx.lineWidth = Math.max(2, r * 0.18);
+    ctx.lineCap = 'round';
+    const arm = Math.sin(S.anim * 8 + m.px) * r * 0.25;
+    ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.15); ctx.lineTo(-r * 1.12, -r * 0.05 - arm); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.8, r * 0.15); ctx.lineTo(r * 1.12, -r * 0.05 + arm); ctx.stroke();
+
+    // 몸통
+    drawDot(ctx, 0, 0, r, body);
+
     // 눈
-    ctx.fillStyle = '#fff';
-    drawDot(ctx, cx - r * 0.35, cy - r * 0.1, r * 0.22, '#fff');
-    drawDot(ctx, cx + r * 0.35, cy - r * 0.1, r * 0.22, '#fff');
-    ctx.fillStyle = '#1a2233';
-    drawDot(ctx, cx - r * 0.35 + m.dir.x * r * 0.1, cy - r * 0.1 + m.dir.y * r * 0.1, r * 0.11, '#1a2233');
-    drawDot(ctx, cx + r * 0.35 + m.dir.x * r * 0.1, cy - r * 0.1 + m.dir.y * r * 0.1, r * 0.11, '#1a2233');
+    const lx = (m.dir.x || 0) * r * 0.12;
+    const ly = (m.dir.y || 0) * r * 0.12;
+    if (chase) {
+      drawDot(ctx, 0, -r * 0.05, r * 0.5, '#fff');
+      drawDot(ctx, lx, -r * 0.05 + ly, r * 0.22, '#1a2233');
+    } else {
+      drawDot(ctx, -r * 0.34, -r * 0.05, r * 0.3, '#fff');
+      drawDot(ctx, r * 0.34, -r * 0.05, r * 0.3, '#fff');
+      drawDot(ctx, -r * 0.34 + lx, -r * 0.05 + ly, r * 0.14, '#1a2233');
+      drawDot(ctx, r * 0.34 + lx, -r * 0.05 + ly, r * 0.14, '#1a2233');
+    }
+
+    // 입
+    if (m.mode === 'fright') {
+      ctx.strokeStyle = '#1a2233';
+      ctx.lineWidth = Math.max(1.5, r * 0.1);
+      ctx.beginPath();
+      for (let i = 0; i <= 4; i++) {
+        const xx = -r * 0.4 + i * r * 0.2;
+        const yy = r * 0.45 + (i % 2 ? -r * 0.08 : r * 0.08);
+        i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy);
+      }
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#7a1f1f';
+      ctx.beginPath();
+      ctx.ellipse(0, r * 0.45, r * 0.3, r * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-r * 0.17, r * 0.33, r * 0.1, r * 0.11);
+      ctx.fillRect(r * 0.07, r * 0.33, r * 0.1, r * 0.11);
+    }
+
+    ctx.restore();
   }
 
   function drawHUD(ctx, g) {
@@ -549,7 +605,7 @@ export function mount(container) {
   function updateHint() {
     hint.textContent =
       S.mode === 'playing'
-        ? '방향 버튼으로 이동 · 갈색 벽은 눌러서 파기 · 다이너마이트 먹고 몬스터 역공!'
+        ? '누르는 동안 이동(떼면 멈춤) · 갈색 벽은 눌러서 파기 · 다이너마이트로 몬스터 역공!'
         : '▲◀▶▼ 또는 방향키로 조종합니다.';
   }
 
@@ -561,13 +617,13 @@ export function mount(container) {
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       resumeAudio();
-      setWant(dir);
+      pressDir(dir);
       b.setPointerCapture?.(e.pointerId);
       b.classList.add('active');
     });
-    const clear = () => b.classList.remove('active');
-    b.addEventListener('pointerup', clear);
-    b.addEventListener('pointercancel', clear);
+    const release = () => { b.classList.remove('active'); releaseDir(dir); };
+    b.addEventListener('pointerup', release);
+    b.addEventListener('pointercancel', release);
     return b;
   }
   dpad.append(
@@ -585,19 +641,23 @@ export function mount(container) {
   }
 
   // ----- 키보드 -----
+  const KEYMAP = {
+    ArrowUp: DIRS.up, ArrowDown: DIRS.down, ArrowLeft: DIRS.left, ArrowRight: DIRS.right,
+    w: DIRS.up, s: DIRS.down, a: DIRS.left, d: DIRS.right,
+  };
   function onKeyDown(e) {
-    const map = {
-      ArrowUp: DIRS.up, ArrowDown: DIRS.down, ArrowLeft: DIRS.left, ArrowRight: DIRS.right,
-      w: DIRS.up, s: DIRS.down, a: DIRS.left, d: DIRS.right,
-    };
-    if (map[e.key]) { e.preventDefault(); setWant(map[e.key]); }
+    if (KEYMAP[e.key]) { e.preventDefault(); if (!e.repeat) pressDir(KEYMAP[e.key]); }
     else if ((e.key === 'Enter' || e.key === ' ') && (S.mode === 'won' || S.mode === 'lost')) resetGame();
+  }
+  function onKeyUp(e) {
+    if (KEYMAP[e.key]) releaseDir(KEYMAP[e.key]);
   }
 
   // ----- 시작 -----
   view = createCanvas(stage);
   view.canvas.addEventListener('pointerdown', onCanvasPointerDown);
   window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
   resetGame();
   const loop = createLoop(draw);
   loop.start();
@@ -607,6 +667,7 @@ export function mount(container) {
     loop.stop();
     view.canvas.removeEventListener('pointerdown', onCanvasPointerDown);
     window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
     view.destroy();
     screen.remove();
   };
@@ -627,6 +688,14 @@ function button(label, onClick) {
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function manhattan(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+function tri(ctx, x1, y1, x2, y2, x3, y3) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x3, y3);
+  ctx.closePath();
+  ctx.fill();
+}
 function minBy(arr, fn) { let best = arr[0], bv = Infinity; for (const a of arr) { const v = fn(a); if (v < bv) { bv = v; best = a; } } return best; }
 function maxBy(arr, fn) { let best = arr[0], bv = -Infinity; for (const a of arr) { const v = fn(a); if (v > bv) { bv = v; best = a; } } return best; }
 function roundRect(ctx, x, y, w, h, r) {
