@@ -50,6 +50,73 @@ function chord(notes, opts = {}) {
   notes.forEach((n, i) => tone({ freq: n, delay: i * (opts.stagger ?? 0.09), ...opts }));
 }
 
+// 화이트 노이즈 버퍼 소스(dur초). 폭발/포격음의 재료.
+function noiseSource(c, dur) {
+  const buf = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * dur)), c.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  return src;
+}
+
+// 전차포 발사: 저음 '쿵' 반동 + 포구 화염 노이즈 크랙.
+function playCannon() {
+  if (muted) return;
+  const c = getCtx();
+  if (!c) return;
+  const t0 = c.currentTime;
+  const osc = c.createOscillator();
+  const og = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(230, t0);
+  osc.frequency.exponentialRampToValueAtTime(55, t0 + 0.18);
+  og.gain.setValueAtTime(0.0001, t0);
+  og.gain.exponentialRampToValueAtTime(0.5, t0 + 0.008);
+  og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+  osc.connect(og).connect(c.destination);
+  osc.start(t0); osc.stop(t0 + 0.24);
+  const n = noiseSource(c, 0.12);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 0.6;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.4, t0);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+  n.connect(bp).connect(ng).connect(c.destination);
+  n.start(t0); n.stop(t0 + 0.12);
+}
+
+// 폭발: 로우패스가 아래로 스윕하는 럼블 노이즈 + 저역 서브 붐. intensity(0~1)로 크기/길이 조절.
+function playExplosion(intensity = 1) {
+  if (muted) return;
+  const c = getCtx();
+  if (!c) return;
+  const i = Math.max(0.2, Math.min(1, intensity));
+  const t0 = c.currentTime;
+  const dur = 0.32 + 0.4 * i;
+  const n = noiseSource(c, dur);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(1800, t0);
+  lp.frequency.exponentialRampToValueAtTime(110, t0 + dur);
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.0001, t0);
+  ng.gain.exponentialRampToValueAtTime(0.5 * (0.6 + i * 0.4), t0 + 0.02);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  n.connect(lp).connect(ng).connect(c.destination);
+  n.start(t0); n.stop(t0 + dur + 0.02);
+  const osc = c.createOscillator();
+  const og = c.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(95, t0);
+  osc.frequency.exponentialRampToValueAtTime(30, t0 + dur * 0.8);
+  og.gain.setValueAtTime(0.0001, t0);
+  og.gain.exponentialRampToValueAtTime(0.55, t0 + 0.015);
+  og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(og).connect(c.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+
 // 게임에서 쓰는 효과음 모음.
 export const sfx = {
   // 벽돌깨기
@@ -61,6 +128,9 @@ export const sfx = {
   // 쿤판(슬라이드)
   slide: () => tone({ freq: 150, slideTo: 120, dur: 0.05, type: 'sine', gain: 0.1 }),
   place: () => tone({ freq: 330, dur: 0.05, type: 'triangle', gain: 0.12 }),
+  // 탱크 배틀(포격)
+  cannon: () => playCannon(),
+  explosion: (intensity) => playExplosion(intensity),
 };
 
 // 지속되는 분사(로켓) 소리 — 필터링된 화이트 노이즈 루프. startThrust/stopThrust 로 제어.

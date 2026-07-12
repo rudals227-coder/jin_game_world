@@ -128,7 +128,7 @@ export function mount(container) {
     if (w.ammo !== Infinity) w.ammo -= 1;
     if (w.ammo <= 0) p.weapon = 'basic';
     S.mode = 'flight';
-    sfx.paddle();
+    sfx.cannon();
     renderControls();
     updateHint();
   }
@@ -342,8 +342,8 @@ export function mount(container) {
   }
 
   function boom(intensity) {
-    // 폭발음: 강도에 따라 저음 슬라이드
-    intensity > 0.6 ? sfx.lose() : sfx.brick();
+    // 폭발음: 반경에 비례한 럼블 + 서브 붐(전차포 느낌)
+    sfx.explosion(intensity);
   }
 
   // ================= 렌더 =================
