@@ -81,7 +81,7 @@ export function mount(container) {
   // ----- 렌더 -----
   function geom() {
     const W = view.width, H = view.height;
-    const hud = 56, pad = 14;
+    const hud = 88, pad = 14;
     const side = Math.max(80, Math.min(W - pad * 2, H - hud - pad * 2));
     const ox = (W - side) / 2;
     const oy = hud + (H - hud - side) / 2;
@@ -143,16 +143,22 @@ export function mount(container) {
 
   function drawHUD(ctx, g) {
     ctx.textBaseline = 'middle';
+    // 상단 작은 줄: 제목(좌) + 수/최소 기록(우)
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#4f8cff';
-    ctx.font = '800 20px sans-serif';
-    ctx.fillText('15 퍼즐', 14, g.hud / 2);
-    ctx.font = '700 14px sans-serif';
+    ctx.fillStyle = '#4bd0a0';
+    ctx.font = '800 18px sans-serif';
+    ctx.fillText('15 퍼즐', 14, 20);
     ctx.textAlign = 'right';
+    ctx.font = '700 14px sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillText(`${S.moves}수 · ${fmtTime(S.elapsed)}`, g.W - 14, g.hud / 2 - 9);
+    ctx.fillText(`${S.moves}수`, g.W - 14, 14);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(S.best ? `최소 ${S.best}수` : '1~15를 순서대로!', g.W - 14, g.hud / 2 + 9);
+    ctx.fillText(S.best ? `최소 ${S.best}수` : '순서대로!', g.W - 14, 30);
+    // 퍼즐 바로 위 중앙: 큰 타이머(MM:SS:CC). 자릿수 흔들림 방지를 위해 모노스페이스.
+    ctx.textAlign = 'center';
+    ctx.fillStyle = S.solved ? '#4bd0a0' : 'rgba(255,255,255,0.96)';
+    ctx.font = `800 ${Math.floor(g.hud * 0.4)}px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace`;
+    ctx.fillText(fmtTime(S.elapsed), g.W / 2, g.hud - 24);
   }
 
   function drawOverlay(ctx, g) {
@@ -236,9 +242,15 @@ function button(label, onClick) {
   return b;
 }
 function easeOut(p) { return 1 - (1 - p) * (1 - p); }
+// MM:SS:CC (CC = 백분의 1초).
 function fmtTime(s) {
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-  return `${m}:${String(sec).padStart(2, '0')}`;
+  const total = Math.floor(s * 100); // 센티초
+  const cs = total % 100;
+  const totalSec = Math.floor(total / 100);
+  const m = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${p2(m)}:${p2(sec)}:${p2(cs)}`;
 }
 function roundRect(ctx, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
