@@ -1,11 +1,11 @@
 // 광산 채굴(팩맨 스타일). 미로 이동 + 수집 + 몬스터 회피 + 파워업 역공 + 벽 파기.
 // 게임 모듈 계약: mount(container) → unmount().
-// 조작: 화면 D-pad(▲◀▶▼) + PC 방향키. 목표: 보석(G) 전부 획득.
+// 조작: 좌하단 위/아래, 우하단 좌/우 버튼 + PC 방향키. 목표: 모든 광석 수집.
 import { createCanvas } from '../../engine/canvas.js';
 import { createLoop } from '../../engine/loop.js';
 import { sfx, resumeAudio, createMuteButton } from '../../engine/audio.js';
 import {
-  TILE, LEVEL, parseLevel, tileAt, passable, isDiggable, isTunnel, collectAt, dig, gemsRemaining,
+  TILE, LEVEL, parseLevel, tileAt, passable, isDiggable, isTunnel, collectAt, dig, oreRemaining,
 } from './maze.js';
 
 const PLAYER_SPEED = 5.5; // 칸/초
@@ -15,6 +15,19 @@ const DIG_TIME = 0.6; // 파기 소요(초)
 const FRIGHT_TIME = 7; // 파워 지속(초)
 const EAT_DIST = 0.6; // 접촉 판정 거리(칸)
 const TURN_TOL = 0.45; // 코너 프리턴 허용 거리(칸) — 방향 전환 반응성
+
+// 보물(랜덤 위치 생성) — 먹으면 유리한 랜덤 효과
+const TREASURE_MAX = 3; // 동시에 최대 개수
+const TREASURE_RESPAWN = 6; // 재생성 간격(초)
+// 보물 효과 (모두 플레이어에게 유리). weight = 등장 확률 가중치
+const GEM_EFFECTS = [
+  { key: 'speed', label: '⚡ 스피드업!', weight: 3, dur: 6 },
+  { key: 'freeze', label: '❄️ 몬스터 정지!', weight: 3, dur: 4 },
+  { key: 'scare', label: '💥 몬스터 겁먹음!', weight: 3, dur: FRIGHT_TIME },
+  { key: 'digfast', label: '⛏️ 즉시 채굴!', weight: 2, dur: 8 },
+  { key: 'bonus', label: '⭐ 보너스 +300!', weight: 3, dur: 0 },
+  { key: 'life', label: '❤️ 목숨 +1!', weight: 1, dur: 0 },
+];
 
 const DIRS = {
   up: { x: 0, y: -1 },
@@ -51,6 +64,10 @@ export function mount(container) {
     eatValue: 200,
     respawnPause: 0,
     anim: 0, // 입 애니메이션용
+    treasures: [], // [{ c, r }] 랜덤 보물
+    treasureTimer: 0,
+    effects: { speed: 0, freeze: 0, digfast: 0 }, // 보물 효과 타이머(초)
+    msg: { text: '', timer: 0 }, // 효과 획득 안내
   };
 
   function resetGame() {
@@ -73,8 +90,56 @@ export function mount(container) {
       px: m.c, py: m.r, dir: { x: -1, y: 0 }, target: null,
       type: m.type, mode: 'normal', cooldown: 0, spawnC: m.c, spawnR: m.r,
     }));
+    S.treasures = [];
+    S.treasureTimer = 0;
+    S.effects.speed = S.effects.freeze = S.effects.digfast = 0;
+    S.msg = { text: '', timer: 0 };
+    for (let i = 0; i < TREASURE_MAX; i++) spawnTreasure();
     S.mode = 'ready';
     updateHint();
+  }
+
+  // ----- 보물 -----
+  function spawnTreasure() {
+    if (S.treasures.length >= TREASURE_MAX) return;
+    const cells = [];
+    for (let r = 0; r < S.rows; r++)
+      for (let c = 0; c < S.cols; c++) {
+        const t = S.grid[r][c];
+        if (t === TILE.WALL || t === TILE.DIG) continue; // 벽 제외
+        if (S.treasures.some((g) => g.c === c && g.r === r)) continue; // 중복 제외
+        const pc = Math.round(S.player.px), pr = Math.round(S.player.py);
+        if (c === pc && r === pr) continue; // 플레이어 위 제외
+        cells.push({ c, r });
+      }
+    if (cells.length) S.treasures.push(cells[Math.floor(Math.random() * cells.length)]);
+  }
+
+  function collectTreasureAt(c, r) {
+    const idx = S.treasures.findIndex((g) => g.c === c && g.r === r);
+    if (idx < 0) return;
+    S.treasures.splice(idx, 1);
+    applyGemEffect();
+    S.treasureTimer = TREASURE_RESPAWN; // 잠시 후 재생성
+  }
+
+  function applyGemEffect() {
+    const total = GEM_EFFECTS.reduce((s, e) => s + e.weight, 0);
+    let roll = Math.random() * total;
+    const eff = GEM_EFFECTS.find((e) => (roll -= e.weight) < 0) || GEM_EFFECTS[0];
+    switch (eff.key) {
+      case 'speed': S.effects.speed = eff.dur; break;
+      case 'freeze': S.effects.freeze = eff.dur; break;
+      case 'digfast': S.effects.digfast = eff.dur; break;
+      case 'scare':
+        S.frightTimer = eff.dur; S.eatValue = 200;
+        for (const m of S.monsters) if (m.cooldown <= 0) m.mode = 'fright';
+        break;
+      case 'bonus': S.score += 300; break;
+      case 'life': S.lives += 1; break;
+    }
+    S.msg = { text: eff.label, timer: 1.6 };
+    sfx.brick();
   }
 
   function resetPositions() {
@@ -143,6 +208,7 @@ export function mount(container) {
             p.px = p.target.x; p.py = p.target.y;
             const g0 = collectAt(S.grid, p.target.x, p.target.y);
             if (g0) handleCollect(g0);
+            collectTreasureAt(p.target.x, p.target.y);
             p.dir = { ...p.want };
             p.target = { x: nc, y: nr };
           }
@@ -155,9 +221,10 @@ export function mount(container) {
       let r = Math.round(p.py);
       p.px = c; p.py = r;
 
-      // 수집
+      // 수집 (광석/파워 + 보물)
       const got = collectAt(S.grid, c, r);
       if (got) handleCollect(got);
+      collectTreasureAt(c, r);
 
       // 워프
       const w = maybeWarp(p, c, r);
@@ -168,7 +235,8 @@ export function mount(container) {
       if (dec.dig) {
         p.digCell = dec.dig;
         p.digTimer += dt;
-        if (p.digTimer >= DIG_TIME) {
+        const digTime = S.effects.digfast > 0 ? 0.08 : DIG_TIME; // 즉시 채굴 효과
+        if (p.digTimer >= digTime) {
           dig(S.grid, dec.dig.c, dec.dig.r);
           S.score += 20; sfx.paddle();
           p.digTimer = 0; p.digCell = null;
@@ -183,7 +251,8 @@ export function mount(container) {
         return; // 정지
       }
     }
-    moveToward(p, dt, PLAYER_SPEED);
+    const pspeed = PLAYER_SPEED * (S.effects.speed > 0 ? 1.5 : 1); // 스피드업 효과
+    moveToward(p, dt, pspeed);
     if (p.dir.x) p.face = Math.sign(p.dir.x);
   }
 
@@ -240,10 +309,9 @@ export function mount(container) {
 
   // ----- 수집/충돌/파워 -----
   function handleCollect(type) {
-    if (type === TILE.ORE) { S.score += 10; sfx.wall(); }
-    else if (type === TILE.GEM) {
-      S.score += 100; sfx.brick();
-      if (gemsRemaining(S.grid) === 0) { S.mode = 'won'; sfx.win(); updateHint(); }
+    if (type === TILE.ORE) {
+      S.score += 10; sfx.wall();
+      if (oreRemaining(S.grid) === 0) { S.mode = 'won'; sfx.win(); updateHint(); } // 광석 전부 = 클리어
     } else if (type === TILE.POWER) {
       S.score += 50; sfx.paddle();
       S.frightTimer = FRIGHT_TIME; S.eatValue = 200;
@@ -282,6 +350,15 @@ export function mount(container) {
 
     if (S.mode !== 'playing') return;
 
+    // 보물 효과 타이머 + 안내 메시지
+    for (const k of ['speed', 'freeze', 'digfast']) if (S.effects[k] > 0) S.effects[k] = Math.max(0, S.effects[k] - dt);
+    if (S.msg.timer > 0) S.msg.timer -= dt;
+    // 보물 재생성
+    if (S.treasures.length < TREASURE_MAX) {
+      S.treasureTimer -= dt;
+      if (S.treasureTimer <= 0) { spawnTreasure(); S.treasureTimer = TREASURE_RESPAWN; }
+    }
+
     if (S.respawnPause > 0) { S.respawnPause -= dt; return; }
 
     if (S.frightTimer > 0) {
@@ -290,7 +367,7 @@ export function mount(container) {
     }
 
     stepPlayer(dt);
-    for (const m of S.monsters) stepMonster(m, dt);
+    if (S.effects.freeze <= 0) for (const m of S.monsters) stepMonster(m, dt); // 몬스터 정지 효과
     checkCollisions();
   }
 
@@ -334,10 +411,36 @@ export function mount(container) {
       }
     }
 
+    // 보물 (랜덤 위치)
+    for (const t of S.treasures) drawTreasure(ctx, ox + (t.c + 0.5) * cell, oy + (t.r + 0.5) * cell, cell);
+
     drawPlayer(ctx, g);
     for (const m of S.monsters) drawMonster(ctx, m, g);
     drawHUD(ctx, g);
     if (S.mode !== 'playing') drawOverlay(ctx, g);
+  }
+
+  // 금색 보물 (먹으면 랜덤 효과) — 광석·보석과 구분되게 발광
+  function drawTreasure(ctx, cx, cy, cell) {
+    const s = cell * 0.32;
+    const pulse = 0.85 + 0.15 * Math.sin(S.anim * 5 + cx);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = 'rgba(255,210,90,0.9)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(s * 0.75, -s * 0.2);
+    ctx.lineTo(0, s);
+    ctx.lineTo(-s * 0.75, -s * 0.2);
+    ctx.closePath();
+    const gr = ctx.createLinearGradient(-s, -s, s, s);
+    gr.addColorStop(0, '#ffe58a');
+    gr.addColorStop(1, '#ff9f43');
+    ctx.fillStyle = gr;
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawWall(ctx, x, y, cell) {
@@ -570,17 +673,37 @@ export function mount(container) {
   }
 
   function drawHUD(ctx, g) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = `700 ${Math.floor(g.topR * 0.7)}px sans-serif`;
-    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText(`점수 ${S.score}`, 12, g.topR / 2);
+    // 남은 광석(클리어 목표)
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#7ff0ff';
-    ctx.fillText(`💎 ${gemsRemaining(S.grid)}`, g.W / 2, g.topR / 2);
+    ctx.fillStyle = '#c8d0dd';
+    ctx.fillText(`● ${oreRemaining(S.grid)}`, g.W / 2, g.topR / 2);
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffe066';
+    ctx.fillStyle = '#ff6b6b';
     ctx.fillText('♥'.repeat(Math.max(0, S.lives)), g.W - 12, g.topR / 2);
+
+    // 효과 획득 안내 메시지 (보드 위 중앙)
+    if (S.msg.timer > 0 && S.msg.text) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(255,224,120,${Math.min(1, S.msg.timer)})`;
+      ctx.font = `800 ${Math.floor(g.W * 0.045)}px sans-serif`;
+      ctx.fillText(S.msg.text, g.W / 2, g.topR + g.H * 0.03);
+    }
+    // 활성 효과 뱃지
+    const badges = [];
+    if (S.effects.speed > 0) badges.push('⚡');
+    if (S.effects.freeze > 0) badges.push('❄️');
+    if (S.effects.digfast > 0) badges.push('⛏️');
+    if (S.frightTimer > 0) badges.push('💥');
+    if (badges.length) {
+      ctx.textAlign = 'left';
+      ctx.font = `${Math.floor(g.topR * 0.7)}px sans-serif`;
+      ctx.fillText(badges.join(' '), 12, g.topR * 1.4);
+    }
   }
 
   function drawOverlay(ctx, g) {
@@ -590,7 +713,7 @@ export function mount(container) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     let title = '', sub = '';
-    if (S.mode === 'ready') { title = '광산 채굴'; sub = '방향 버튼으로 시작 · 보석 💎 을 모두 캐세요'; }
+    if (S.mode === 'ready') { title = '광산 채굴'; sub = '방향 버튼으로 시작 · 광석 ●을 모두 캐면 클리어! 보물은 랜덤 효과'; }
     else if (S.mode === 'won') { title = '🎉 클리어!'; sub = `점수 ${S.score} · 탭해서 다시 시작`; }
     else { title = '게임 오버'; sub = `점수 ${S.score} · 탭해서 다시 시작`; }
     ctx.fillStyle = S.mode === 'lost' ? '#ff8a8a' : '#ffd86b';
@@ -605,12 +728,11 @@ export function mount(container) {
   function updateHint() {
     hint.textContent =
       S.mode === 'playing'
-        ? '누르는 동안 이동(떼면 멈춤) · 갈색 벽은 눌러서 파기 · 다이너마이트로 몬스터 역공!'
-        : '▲◀▶▼ 또는 방향키로 조종합니다.';
+        ? '광석 ●을 모두 캐면 클리어 · 금색 보물 = 랜덤 효과 · 갈색 벽은 눌러서 파기'
+        : '좌하단 위/아래 · 우하단 좌/우 (또는 방향키)로 조종합니다.';
   }
 
-  // ----- D-pad -----
-  const dpad = el('div', 'dpad');
+  // ----- 조작 버튼: 좌하단 = 위/아래, 우하단 = 좌/우 -----
   function padButton(cls, label, dir) {
     const b = el('div', 'pad ' + cls);
     b.textContent = label;
@@ -626,12 +748,12 @@ export function mount(container) {
     b.addEventListener('pointercancel', release);
     return b;
   }
-  dpad.append(
-    padButton('up', '▲', DIRS.up),
-    padButton('left', '◀', DIRS.left),
-    padButton('right', '▶', DIRS.right),
-    padButton('down', '▼', DIRS.down)
-  );
+  const dpad = el('div', 'dpad-split');
+  const leftPad = el('div', 'pad-group vertical'); // 위/아래
+  leftPad.append(padButton('up', '▲', DIRS.up), padButton('down', '▼', DIRS.down));
+  const rightPad = el('div', 'pad-group horizontal'); // 좌/우
+  rightPad.append(padButton('left', '◀', DIRS.left), padButton('right', '▶', DIRS.right));
+  dpad.append(leftPad, rightPad);
   stage.append(dpad);
 
   // ----- 탭(캔버스): 재시작 -----

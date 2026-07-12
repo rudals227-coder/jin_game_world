@@ -347,37 +347,42 @@ button.toggle.active {
   pointer-events: none;
 }
 
-/* ---------- mining D-pad ---------- */
-.dpad {
+/* ---------- mining 조작: 좌하단 위/아래, 우하단 좌/우 ---------- */
+.dpad-split {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   bottom: calc(16px + var(--safe-bottom));
-  display: grid;
-  grid-template-columns: repeat(3, 58px);
-  grid-template-rows: repeat(3, 58px);
-  gap: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 calc(18px + var(--safe-right)) 0 calc(18px + var(--safe-left));
+  pointer-events: none;
   z-index: 2;
-  touch-action: none;
 }
-.dpad .pad {
+.dpad-split .pad-group {
+  display: flex;
+  gap: 10px;
+  pointer-events: none;
+}
+.dpad-split .pad-group.vertical { flex-direction: column; }
+.dpad-split .pad {
+  pointer-events: auto;
+  width: 66px;
+  height: 66px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(30, 36, 48, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
+  border-radius: 14px;
   color: #fff;
-  font-size: 22px;
+  font-size: 24px;
   backdrop-filter: blur(4px);
   touch-action: none;
   user-select: none;
 }
-.dpad .up { grid-column: 2; grid-row: 1; }
-.dpad .left { grid-column: 1; grid-row: 2; }
-.dpad .right { grid-column: 3; grid-row: 2; }
-.dpad .down { grid-column: 2; grid-row: 3; }
-.dpad .pad.active {
+.dpad-split .pad.active {
   background: rgba(79, 140, 255, 0.85);
   transform: scale(0.94);
 }
