@@ -386,18 +386,15 @@ button.toggle.active {
 .dpad-btn.down { grid-column: 2; grid-row: 2; }
 .dpad-btn.right { grid-column: 3; grid-row: 2; }
 
-/* ---------- scorched(탱크 배틀) 조작 패널 ---------- */
+/* ---------- scorched(탱크 배틀) 조작 패널: 캔버스와 겹치지 않는 하단 전용 공간 ---------- */
 .scorched-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px calc(14px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(14px + var(--safe-left));
-  background: linear-gradient(to top, rgba(10, 13, 20, 0.92), rgba(10, 13, 20, 0));
+  padding: 10px calc(14px + var(--safe-right)) 10px calc(14px + var(--safe-left));
+  background: var(--surface);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   --pc: #4dabf7;
 }
 .scorched-controls.locked { opacity: 0.45; pointer-events: none; }

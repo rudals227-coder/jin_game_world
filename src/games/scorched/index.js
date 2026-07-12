@@ -58,7 +58,8 @@ export function mount(container) {
     shots: [],          // 비행 중 포탄들
     particles: [],
     shake: 0,
-    cam: 0,             // 카메라 좌측 월드 x
+    cam: { x: 0, y: 0 },// 카메라 좌상단 월드 좌표
+    zoom: 1,            // 사용자 줌(1=배틀필드 전체, 핀치로 확대)
     settleT: 0,
     winner: -1,
     msg: '',
@@ -88,7 +89,9 @@ export function mount(container) {
     S.winner = -1;
     S.mode = 'aim';
     rollWind();
-    S.cam = clampCam(activeCamTarget());
+    S.zoom = 1;
+    S.cam.x = 0; S.cam.y = 0;
+    clampCam();
     S.msg = '';
     renderControls();
     updateHint();
@@ -290,20 +293,27 @@ export function mount(container) {
       if (allRest && S.settleT <= 0 && S.particles.length === 0) endTurnMaybe();
     }
 
-    // 카메라: 비행 중엔 포탄, 그 외엔 현재 탱크를 따라감
-    const target = S.mode === 'flight' && S.shots[0]
-      ? S.shots[0].x - visibleW() / 2
-      : activeCamTarget();
-    S.cam += (clampCam(target) - S.cam) * Math.min(1, dt * (S.mode === 'flight' ? 6 : 4));
+    // 카메라: 비행 중 손을 안 대고 있으면 포탄을 부드럽게 따라감(확대 상태에서도 착탄 확인).
+    // 손가락으로 핀치/팬 중이면 사용자 조작 우선.
+    if (S.mode === 'flight' && S.shots[0] && pointers.size === 0) {
+      const tx = S.shots[0].x - vpW() / 2;
+      const ty = S.shots[0].y - vpH() / 2;
+      S.cam.x += (tx - S.cam.x) * Math.min(1, dt * 6);
+      S.cam.y += (ty - S.cam.y) * Math.min(1, dt * 6);
+    }
+    clampCam();
   }
 
-  function activeCamTarget() { return active().x - visibleW() / 2; }
-  // 화면에 보이는 월드 가로폭 = view.width / scale (scale = view.height / WORLD_H)
-  function visibleW() { return view ? (view.width * WORLD_H) / view.height : WORLD_W; }
-  function clampCam(x) {
-    const vw = visibleW();
-    if (vw >= WORLD_W) return (WORLD_W - vw) / 2;
-    return Math.max(0, Math.min(WORLD_W - vw, x));
+  // ----- 카메라(줌/팬) -----
+  // baseScale = 배틀필드 전체가 딱 들어가는 배율(contain). effScale = baseScale * 줌.
+  function baseScale() { return Math.min(view.width / WORLD_W, view.height / WORLD_H); }
+  function effScale() { return baseScale() * S.zoom; }
+  function vpW() { return view.width / effScale(); }  // 보이는 월드 가로폭
+  function vpH() { return view.height / effScale(); } // 보이는 월드 세로폭
+  function clampCam() {
+    const w = vpW(), h = vpH();
+    S.cam.x = w >= WORLD_W ? (WORLD_W - w) / 2 : Math.max(0, Math.min(WORLD_W - w, S.cam.x));
+    S.cam.y = h >= WORLD_H ? (WORLD_H - h) / 2 : Math.max(0, Math.min(WORLD_H - h, S.cam.y));
   }
 
   // ================= 파티클 =================
@@ -340,23 +350,23 @@ export function mount(container) {
   function draw(dt) {
     update(dt);
     const { ctx, width: W, height: H } = view;
-    const scale = H / WORLD_H;
 
-    // 하늘
+    // 하늘 (여백/레터박스 포함 전체를 덮음)
     const sky = ctx.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#1a2740');
     sky.addColorStop(1, '#0b1018');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    // 월드 좌표계로 진입 (화면 흔들림 + 스케일 + 카메라)
+    // 월드 좌표계로 진입 (화면 흔들림 + 줌 스케일 + 2D 카메라)
+    const es = effScale();
     const sh = S.shake;
     const shakeX = sh ? (Math.random() * 2 - 1) * sh : 0;
     const shakeY = sh ? (Math.random() * 2 - 1) * sh : 0;
     ctx.save();
     ctx.translate(shakeX, shakeY);
-    ctx.scale(scale, scale);
-    ctx.translate(-S.cam, 0);
+    ctx.scale(es, es);
+    ctx.translate(-S.cam.x, -S.cam.y);
 
     drawTerrain(ctx);
     for (const p of S.players) drawTank(ctx, p);
@@ -376,8 +386,8 @@ export function mount(container) {
     ctx.moveTo(0, t.ground[0]);
     for (let x = 1; x < t.width; x += 2) ctx.lineTo(x, t.ground[x]);
     ctx.lineTo(t.width, t.ground[t.width - 1]);
-    ctx.lineTo(t.width, WORLD_H);
-    ctx.lineTo(0, WORLD_H);
+    ctx.lineTo(t.width, WORLD_H + 800); // 세로 여백(레터박스)까지 흙으로 채움
+    ctx.lineTo(0, WORLD_H + 800);
     ctx.closePath();
     const g = ctx.createLinearGradient(0, WORLD_H * 0.4, 0, WORLD_H);
     g.addColorStop(0, '#6b4a2c');
@@ -550,12 +560,12 @@ export function mount(container) {
   function updateHint() {
     if (S.mode === 'over') { hint.textContent = '게임 종료 — 새 게임으로 재시작하세요.'; return; }
     if (S.mode === 'flight' || S.mode === 'settle') { hint.textContent = '포탄 비행 중…'; return; }
-    hint.textContent = `${active().name} 차례 · 각도/파워 조절 후 발사 · 캔버스를 드래그해 조준할 수도 있어요`;
+    hint.textContent = `${active().name} 차례 · 아래에서 각도/파워 조절 후 발사 · 화면은 핀치 줌 / 드래그로 둘러보기`;
   }
 
   // ================= 조작 패널(DOM) =================
   const controls = el('div', 'scorched-controls');
-  stage.append(controls);
+  screen.insertBefore(controls, hint); // 캔버스와 겹치지 않는 하단 전용 공간
   let angleInput, powerInput, angleVal, powerVal, weaponRow;
 
   function renderControls() {
@@ -611,39 +621,62 @@ export function mount(container) {
     return { row, input, val };
   }
 
-  // 캔버스 드래그 조준(현재 탱크 → 포인터 방향/거리)
-  let aiming = false;
-  function screenToWorld(clientX, clientY) {
-    const rect = view.canvas.getBoundingClientRect();
-    const scale = view.height / WORLD_H;
-    return {
-      x: S.cam + (clientX - rect.left) / scale,
-      y: (clientY - rect.top) / scale,
-    };
+  // 캔버스 = 보기 전용(핀치 줌 + 드래그 팬). 조준/발사는 하단 패널에서.
+  const pointers = new Map(); // pointerId → {x,y}(캔버스 로컬)
+  let pinchStart = null;      // {dist, zoom, anchor:{x,y}(월드)}
+  let panLast = null;         // {x,y}(캔버스 로컬)
+  function canvasPoint(e) {
+    const r = view.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
-  function aimAt(clientX, clientY) {
-    const p = active();
-    const w = screenToWorld(clientX, clientY);
-    const dx = w.x - p.x;
-    const dy = p.y - w.y; // 위를 양수로
-    let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    deg = Math.max(0, Math.min(180, deg));
-    const dist = Math.hypot(dx, dy);
-    const pow = Math.max(5, Math.min(100, Math.round(dist / 6)));
-    p.angle = Math.round(deg);
-    p.power = pow;
-    if (angleInput) { angleInput.value = p.angle; angleVal.textContent = p.angle + '°'; }
-    if (powerInput) { powerInput.value = p.power; powerVal.textContent = p.power; }
+  function toWorld(px, py) {
+    const es = effScale();
+    return { x: S.cam.x + px / es, y: S.cam.y + py / es };
+  }
+  function pinchMid() {
+    const p = [...pointers.values()];
+    return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+  }
+  function pinchDist() {
+    const p = [...pointers.values()];
+    return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;
   }
   function onCanvasDown(e) {
     resumeAudio();
-    if (S.mode !== 'aim') return;
-    aiming = true;
     view.canvas.setPointerCapture?.(e.pointerId);
-    aimAt(e.clientX, e.clientY);
+    pointers.set(e.pointerId, canvasPoint(e));
+    if (pointers.size === 2) {
+      const m = pinchMid();
+      pinchStart = { dist: pinchDist(), zoom: S.zoom, anchor: toWorld(m.x, m.y) };
+      panLast = null;
+    } else if (pointers.size === 1) {
+      panLast = canvasPoint(e);
+    }
   }
-  function onCanvasMove(e) { if (aiming) aimAt(e.clientX, e.clientY); }
-  function onCanvasUp() { aiming = false; }
+  function onCanvasMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, canvasPoint(e));
+    if (pointers.size >= 2 && pinchStart) {
+      const m = pinchMid();
+      S.zoom = Math.max(1, Math.min(3.5, pinchStart.zoom * (pinchDist() / pinchStart.dist)));
+      const es = effScale();
+      S.cam.x = pinchStart.anchor.x - m.x / es; // 핀치 중심(anchor)을 손가락 아래 고정
+      S.cam.y = pinchStart.anchor.y - m.y / es;
+      clampCam();
+    } else if (pointers.size === 1 && panLast) {
+      const p = canvasPoint(e);
+      const es = effScale();
+      S.cam.x -= (p.x - panLast.x) / es;
+      S.cam.y -= (p.y - panLast.y) / es;
+      panLast = p;
+      clampCam();
+    }
+  }
+  function onCanvasUp(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchStart = null;
+    panLast = pointers.size === 1 ? [...pointers.values()][0] : null;
+  }
 
   // ================= 키보드 =================
   function onKeyDown(e) {
