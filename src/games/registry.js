@@ -58,6 +58,16 @@ export const games = [
     cover: scorchedCover,
     load: () => import('./scorched/index.js'),
   },
+  {
+    id: '2048',
+    title: '2048',
+    desc: '타일을 밀어 같은 숫자를 합치자.',
+    tagline: '스와이프로 같은 숫자 타일을 합쳐 2048을 만드세요. 한 번 잡으면 놓기 힘든 숫자 퍼즐.',
+    tags: ['퍼즐', '숫자', '터치'],
+    accent: '#edc22e',
+    cover: cover2048,
+    load: () => import('./g2048/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -296,6 +306,45 @@ function scorchedCover(uid = 's') {
     ${tank(70, 150, '#4dabf7', '#2f6bd6', 1.0)}
     ${tank(320, 152, '#ff6b5a', '#d8412f', 2.1)}
     <circle cx="300" cy="70" r="26" fill="url(#sboom-${uid})"/>
+  </svg>`;
+}
+
+// 2048: 4×4 보드에 대표 숫자 타일 몇 개.
+function cover2048(uid = 'n') {
+  const W = 400, H = 240;
+  const side = 190;
+  const ox = (W - side) / 2, oy = (H - side) / 2;
+  const gap = side * 0.05;
+  const cell = (side - gap * 5) / 4;
+  const COLORS = { 0: 'rgba(238,228,218,0.30)', 2: '#eee4da', 8: '#f2b179', 16: '#f59563', 32: '#f67c5f', 128: '#edcf72', 2048: '#edc22e' };
+  const layout = [
+    [2, 0, 8, 0],
+    [0, 16, 0, 32],
+    [128, 0, 0, 0],
+    [0, 0, 0, 2048],
+  ];
+  let tiles = '';
+  for (let r = 0; r < 4; r++)
+    for (let c = 0; c < 4; c++) {
+      const v = layout[r][c];
+      const x = ox + gap + c * (cell + gap);
+      const y = oy + gap + r * (cell + gap);
+      tiles += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="6" fill="${COLORS[v] || 'rgba(238,228,218,0.30)'}"/>`;
+      if (v) {
+        const fs = v < 100 ? cell * 0.42 : v < 1000 ? cell * 0.34 : cell * 0.26;
+        tiles += `<text x="${(x + cell / 2).toFixed(1)}" y="${(y + cell / 2 + fs * 0.34).toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(1)}" font-weight="800" font-family="sans-serif" fill="${v <= 4 ? '#776e65' : '#f9f6f2'}">${v}</text>`;
+      }
+    }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="n2bg-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2a2620"/>
+        <stop offset="1" stop-color="#0b0e15"/>
+      </linearGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#n2bg-${uid})"/>
+    <rect x="${ox}" y="${oy}" width="${side}" height="${side}" rx="10" fill="#bbada0"/>
+    ${tiles}
   </svg>`;
 }
 
