@@ -122,9 +122,14 @@ export function mount(container) {
     if (w.ammo <= 0) return;
     const a = (p.angle * Math.PI) / 180;
     const v = (p.power / 100) * MAX_V;
-    const bx = p.x + Math.cos(a) * (TANK_R + 6);
-    const by = p.y - TANK_H / 2 - 4 - Math.sin(a) * (TANK_R + 6);
-    S.shots = [makeShot(bx, by, Math.cos(a) * v, -Math.sin(a) * v, w)];
+    const count = w.volley || 1; // 삼연포 등: 한 번에 여러 발 부채꼴
+    S.shots = [];
+    for (let k = 0; k < count; k++) {
+      const aa = a + (k - (count - 1) / 2) * (6 * Math.PI / 180); // 6° 간격
+      const bx = p.x + Math.cos(aa) * (TANK_R + 6);
+      const by = p.y - TANK_H / 2 - 4 - Math.sin(aa) * (TANK_R + 6);
+      S.shots.push(makeShot(bx, by, Math.cos(aa) * v, -Math.sin(aa) * v, w));
+    }
     if (w.ammo !== Infinity) w.ammo -= 1;
     if (w.ammo <= 0) p.weapon = 'basic';
     S.mode = 'flight';
@@ -137,7 +142,7 @@ export function mount(container) {
     return {
       x, y, vx, vy, w,
       t: 0, armed: false, trail: [],
-      split: false, rolling: false, rollDist: 0, rollDir: 1,
+      split: false, rolling: false, rollDist: 0, rollDir: 1, bounces: 0,
     };
   }
 
@@ -147,13 +152,15 @@ export function mount(container) {
       if (s.rolling) { stepRoll(s, dt); continue; }
       s.t += dt;
       if (s.t > 0.08) s.armed = true;
-      // 분열탄: 정점(하강 시작)에서 3발로 분열
+      // 분열탄/집속탄: 정점(하강 시작)에서 여러 발로 분열
       if (s.w.split && !s.split && s.vy >= 0) {
         s.split = true;
         s.dead = true;
-        for (let k = -1; k <= 1; k++) {
-          const speed = Math.hypot(s.vx, s.vy) * 0.9;
-          const ang = Math.atan2(s.vy, s.vx) + k * 0.28;
+        const n = s.w.split;
+        const speed = Math.hypot(s.vx, s.vy) * 0.9;
+        const base = Math.atan2(s.vy, s.vx);
+        for (let k = 0; k < n; k++) {
+          const ang = base + (k - (n - 1) / 2) * 0.22;
           const c = makeShot(s.x, s.y, Math.cos(ang) * speed, Math.sin(ang) * speed,
             { ...s.w, split: 0 });
           c.armed = true;
@@ -177,6 +184,14 @@ export function mount(container) {
       if (hitTank) { impact(s, s.x, s.y); continue; }
       // 지형 충돌
       if (isSolid(S.terrain, s.x, s.y)) {
+        if (s.w.bounce && s.bounces < s.w.bounce) { // 튕김탄: 지면에서 튕겨오름
+          s.bounces += 1;
+          s.y = surfaceY(S.terrain, s.x) - 3;
+          s.vy = -Math.abs(s.vy) * 0.55;
+          s.vx *= 0.72;
+          spawnBurst(s.x, s.y, 10, '#cfd6e0');
+          continue;
+        }
         if (s.w.roll) { startRoll(s); continue; }
         if (s.w.pierce) { impact(s, s.x, s.y + s.w.pierce); continue; } // 관통 후 깊이 폭발
         impact(s, s.x, s.y);
@@ -229,7 +244,7 @@ export function mount(container) {
       spawnBurst(x, y, r, '#ffcf6b');
       boom(Math.min(1, r / 60));
     }
-    S.shake = Math.min(24, r * 0.4);
+    S.shake = Math.min(w.nuke ? 42 : 24, r * 0.4);
     // 지형이 바뀌었으니 탱크 재정착 필요 → settle 단계로
   }
 

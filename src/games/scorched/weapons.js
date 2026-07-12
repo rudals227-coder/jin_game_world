@@ -6,20 +6,26 @@ export const BASIC = { id: 'basic', name: '기본탄', icon: '●', radius: 30, 
 
 // 특수탄 풀 — 게임 시작 시 랜덤 지급.
 export const SPECIALS = [
-  { id: 'big',    name: '대형탄',    icon: '💥', radius: 62, damage: 40, desc: '폭발 반경 2배' },
-  { id: 'split',  name: '분열탄',    icon: '☂',  radius: 26, damage: 22, desc: '공중에서 3발로 분열', split: 3 },
-  { id: 'roller', name: '굴림탄',    icon: '⛳', radius: 32, damage: 34, desc: '착지 후 굴러가 폭발', roll: true },
-  { id: 'bunker', name: '벙커버스터', icon: '🛢', radius: 46, damage: 46, desc: '땅을 뚫고 깊이 폭발', pierce: 26 },
-  { id: 'dirt',   name: '흙폭탄',    icon: '⛰',  radius: 52, damage: 0,  desc: '흙을 쌓아 상대를 묻음', dirt: true },
+  { id: 'big',     name: '대형탄',     icon: '💥', radius: 62,  damage: 40, desc: '폭발 반경 2배' },
+  { id: 'split',   name: '분열탄',     icon: '☂',  radius: 26,  damage: 22, desc: '공중에서 3발로 분열', split: 3 },
+  { id: 'cluster', name: '집속탄',     icon: '🌧', radius: 22,  damage: 16, desc: '공중에서 5발로 쏟아짐', split: 5 },
+  { id: 'roller',  name: '굴림탄',     icon: '⛳', radius: 32,  damage: 34, desc: '착지 후 굴러가 폭발', roll: true },
+  { id: 'bunker',  name: '벙커버스터', icon: '🛢', radius: 46,  damage: 46, desc: '땅을 뚫고 깊이 폭발', pierce: 26 },
+  { id: 'dirt',    name: '흙폭탄',     icon: '⛰',  radius: 52,  damage: 0,  desc: '흙을 쌓아 상대를 묻음', dirt: true },
+  { id: 'triple',  name: '삼연포',     icon: '🎯', radius: 26,  damage: 24, desc: '한 번에 3발 부채꼴 발사', volley: 3 },
+  { id: 'bouncer', name: '튕김탄',     icon: '🏀', radius: 34,  damage: 32, desc: '지형을 튕기다 폭발', bounce: 2 },
+  { id: 'heavy',   name: '철갑탄',     icon: '🔩', radius: 20,  damage: 58, desc: '좁지만 강력한 직격탄' },
+  { id: 'nuke',    name: '핵탄',       icon: '☢️', radius: 118, damage: 80, desc: '초대형 폭발(1발 한정)', nuke: true },
 ];
 
-// 특수탄 2종을 뽑아 각 2~3발 지급.
+// 특수탄 3종을 뽑아 각 2~3발 지급(핵탄은 1발).
 export function rollSpecials(rng = Math.random) {
   const pool = SPECIALS.slice();
   const out = [];
-  for (let i = 0; i < 2 && pool.length; i++) {
+  for (let i = 0; i < 3 && pool.length; i++) {
     const w = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-    out.push({ ...w, ammo: 2 + Math.floor(rng() * 2) });
+    const ammo = w.nuke ? 1 : 2 + Math.floor(rng() * 2);
+    out.push({ ...w, ammo });
   }
   return out;
 }
