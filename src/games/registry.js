@@ -68,6 +68,16 @@ export const games = [
     cover: cover2048,
     load: () => import('./g2048/index.js'),
   },
+  {
+    id: 'tetris',
+    title: '테트리스',
+    desc: '떨어지는 블록을 쌓아 줄을 없애자.',
+    tagline: '7가지 조각을 회전·이동해 빈틈없이 쌓고 줄을 지우세요. 레벨이 오를수록 빨라집니다.',
+    tags: ['퍼즐', '아케이드', '터치'],
+    accent: '#b06cf0',
+    cover: tetrisCover,
+    load: () => import('./tetris/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -345,6 +355,43 @@ function cover2048(uid = 'n') {
     <rect width="${W}" height="${H}" fill="url(#n2bg-${uid})"/>
     <rect x="${ox}" y="${oy}" width="${side}" height="${side}" rx="10" fill="#bbada0"/>
     ${tiles}
+  </svg>`;
+}
+
+// 테트리스: 바닥에 쌓인 블록 + 떨어지는 T조각.
+function tetrisCover(uid = 't') {
+  const W = 400, H = 240;
+  const cell = 22;
+  const cols = 10;
+  const bw = cell * cols;
+  const ox = (W - bw) / 2;
+  const oy = H - cell * 6 - 10;
+  const C = { I: '#4dd2e6', O: '#f7d94c', T: '#b06cf0', S: '#6cd06a', Z: '#f2685f', J: '#4d7de6', L: '#f4a13c' };
+  // 바닥에 쌓인 블록(대충 울퉁불퉁)
+  const stack = [
+    [0, 5, 'J'], [1, 5, 'J'], [2, 5, 'S'], [3, 5, 'S'], [5, 5, 'L'], [6, 5, 'L'], [7, 5, 'O'], [8, 5, 'O'], [9, 5, 'Z'],
+    [0, 4, 'J'], [2, 4, 'S'], [3, 4, 'I'], [7, 4, 'O'], [8, 4, 'O'], [9, 4, 'Z'],
+    [3, 3, 'I'], [8, 3, 'L'],
+  ];
+  let blocks = '';
+  const cellSvg = (cx, cy, color) =>
+    `<rect x="${cx + 1}" y="${cy + 1}" width="${cell - 2}" height="${cell - 2}" rx="2" fill="${color}"/>` +
+    `<rect x="${cx + 1}" y="${cy + 1}" width="${cell - 2}" height="${(cell - 2) * 0.28}" rx="2" fill="#ffffff" fill-opacity="0.25"/>`;
+  for (const [c, r, t] of stack) blocks += cellSvg(ox + c * cell, oy + r * cell, C[t]);
+  // 떨어지는 T 조각(위쪽)
+  const tp = [[1, 0], [0, 1], [1, 1], [2, 1]];
+  const tox = ox + 4 * cell, toy = oy - cell * 3;
+  for (const [x, y] of tp) blocks += cellSvg(tox + x * cell, toy + y * cell, C.T);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="tbg-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1a1526"/>
+        <stop offset="1" stop-color="#0a0c12"/>
+      </linearGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#tbg-${uid})"/>
+    <rect x="${ox - 4}" y="${oy - cell * 4 - 4}" width="${bw + 8}" height="${cell * 10 + 8}" rx="6" fill="#12151d"/>
+    ${blocks}
   </svg>`;
 }
 

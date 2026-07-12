@@ -453,6 +453,29 @@ button.toggle.active {
   background: var(--pc);
   color: #0b0e14;
 }
+
+/* ---------- tetris 조작 버튼: 하단 전용 공간 ---------- */
+.tetris-controls {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 8px calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left));
+  background: var(--surface);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.tt-btn {
+  padding: 16px 0;
+  font-size: 22px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  touch-action: none;
+  user-select: none;
+}
+.tt-btn.rot { background: rgba(176, 108, 240, 0.28); border-color: rgba(176, 108, 240, 0.5); }
+.tt-btn.hard { background: rgba(77, 210, 230, 0.22); border-color: rgba(77, 210, 230, 0.45); }
+.tt-btn:active { background: var(--accent-strong); }
 .lander-controls .ctrl {
   pointer-events: auto;
   width: 74px;
