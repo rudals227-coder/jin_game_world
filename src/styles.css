@@ -454,18 +454,22 @@ button.toggle.active {
   color: #0b0e14;
 }
 
-/* ---------- tetris 조작 버튼: 하단 전용 공간 ---------- */
+/* ---------- tetris 조작 버튼: 양손 분리(좌=이동/소프트, 우=하드/회전) ---------- */
 .tetris-controls {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding: 8px calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
   background: var(--surface);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+.tt-group { display: flex; gap: 8px; }
 .tt-btn {
-  padding: 16px 0;
+  flex: 0 0 auto;
+  width: 62px;
+  padding: 18px 0;
   font-size: 22px;
   border-radius: 12px;
   background: var(--surface-2);
@@ -473,7 +477,7 @@ button.toggle.active {
   touch-action: none;
   user-select: none;
 }
-.tt-btn.rot { background: rgba(176, 108, 240, 0.28); border-color: rgba(176, 108, 240, 0.5); }
+.tt-btn.rot { width: 84px; background: rgba(176, 108, 240, 0.28); border-color: rgba(176, 108, 240, 0.5); }
 .tt-btn.hard { background: rgba(77, 210, 230, 0.22); border-color: rgba(77, 210, 230, 0.45); }
 .tt-btn:active { background: var(--accent-strong); }
 .lander-controls .ctrl {

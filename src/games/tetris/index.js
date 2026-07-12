@@ -293,13 +293,19 @@ export function mount(container) {
   }
   const actLeft = () => tryMove(-1, 0);
   const actRight = () => tryMove(1, 0);
-  controls.append(
-    padButton('◀', 'left', actLeft, true),
-    padButton('↻', 'rot', () => tryRotate(1), false),
+  // 양손 분리: 왼쪽=이동/소프트드롭, 오른쪽=하드드롭/회전(엄지에 크게).
+  const leftGroup = el('div', 'tt-group');
+  leftGroup.append(
+    padButton('◀', 'move', actLeft, true),
     padButton('▼', 'soft', softDrop, true),
-    padButton('▶', 'right', actRight, true),
-    padButton('⤓', 'hard', hardDrop, false),
+    padButton('▶', 'move', actRight, true),
   );
+  const rightGroup = el('div', 'tt-group');
+  rightGroup.append(
+    padButton('⤓', 'hard', hardDrop, false),
+    padButton('↻', 'rot', () => tryRotate(1), false),
+  );
+  controls.append(leftGroup, rightGroup);
   screen.insertBefore(controls, hint);
 
   function onCanvasTap() {
