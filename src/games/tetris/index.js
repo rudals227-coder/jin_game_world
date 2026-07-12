@@ -302,8 +302,8 @@ export function mount(container) {
   );
   const rightGroup = el('div', 'tt-group');
   rightGroup.append(
-    padButton('⤓', 'hard', hardDrop, false),
     padButton('↻', 'rot', () => tryRotate(1), false),
+    padButton('⤓', 'hard', hardDrop, false),
   );
   controls.append(leftGroup, rightGroup);
   screen.insertBefore(controls, hint);
