@@ -78,6 +78,16 @@ export const games = [
     cover: tetrisCover,
     load: () => import('./tetris/index.js'),
   },
+  {
+    id: 'slidenum',
+    title: '15 퍼즐',
+    desc: '타일을 밀어 1~15를 순서대로.',
+    tagline: '섞인 숫자 타일을 빈 칸으로 밀어 1부터 15까지 순서대로 정렬하세요. 고전 슬라이딩 퍼즐.',
+    tags: ['퍼즐', '숫자', '터치'],
+    accent: '#4bd0a0',
+    cover: slidenumCover,
+    load: () => import('./slidenum/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -392,6 +402,42 @@ function tetrisCover(uid = 't') {
     <rect width="${W}" height="${H}" fill="url(#tbg-${uid})"/>
     <rect x="${ox - 4}" y="${oy - cell * 4 - 4}" width="${bw + 8}" height="${cell * 10 + 8}" rx="6" fill="#12151d"/>
     ${blocks}
+  </svg>`;
+}
+
+// 15 퍼즐: 4×4 숫자 타일(거의 정렬 + 빈 칸 1개).
+function slidenumCover(uid = 'p') {
+  const W = 400, H = 240;
+  const side = 190;
+  const ox = (W - side) / 2, oy = (H - side) / 2;
+  const gap = side * 0.03;
+  const cell = (side - gap * 5) / 4;
+  // 거의 정렬된 배치(마지막 두 칸만 살짝 섞임 느낌) — 0 = 빈 칸
+  const layout = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15];
+  let tiles = '';
+  for (let i = 0; i < 16; i++) {
+    const v = layout[i];
+    const r = Math.floor(i / 4), c = i % 4;
+    const x = ox + gap + c * (cell + gap);
+    const y = oy + gap + r * (cell + gap);
+    if (v === 0) {
+      tiles += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="6" fill="rgba(255,255,255,0.05)"/>`;
+      continue;
+    }
+    const correct = v === i + 1;
+    tiles += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="6" fill="${correct ? '#39b184' : '#3f76e0'}"/>`;
+    tiles += `<text x="${(x + cell / 2).toFixed(1)}" y="${(y + cell / 2 + cell * 0.17).toFixed(1)}" text-anchor="middle" font-size="${(cell * 0.42).toFixed(1)}" font-weight="800" font-family="sans-serif" fill="#ffffff">${v}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="pbg-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#132030"/>
+        <stop offset="1" stop-color="#0a0d13"/>
+      </linearGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#pbg-${uid})"/>
+    <rect x="${ox}" y="${oy}" width="${side}" height="${side}" rx="10" fill="#1c2230"/>
+    ${tiles}
   </svg>`;
 }
 
