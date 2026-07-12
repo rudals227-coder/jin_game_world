@@ -1,6 +1,6 @@
 // 광산 채굴(팩맨 스타일). 미로 이동 + 수집 + 몬스터 회피 + 파워업 역공 + 벽 파기.
 // 게임 모듈 계약: mount(container) → unmount().
-// 조작: 우측 하단 십자(ㅗ) 방향 패드(상하좌우 버튼) + PC 방향키. 목표: 모든 광석 수집.
+// 조작: 좌하단 4방향 십자 D-pad(중앙 기준 우세 축 하나만) + PC 방향키. 목표: 모든 광석 수집.
 import { createCanvas } from '../../engine/canvas.js';
 import { createLoop } from '../../engine/loop.js';
 import { sfx, resumeAudio, createMuteButton } from '../../engine/audio.js';
@@ -153,22 +153,20 @@ export function mount(container) {
     S.frightTimer = 0;
   }
 
-  // 조작: 우측 하단 ㅗ 방향 패드(드래그로 방향 전환) + PC 방향키 → want 로 통합.
-  const held = []; // 키보드로 눌린 방향 스택
-  let padDir = null; // 방향 패드 현재 방향(드래그 중인 버튼) — 패드가 우선
-  function applyWant() {
-    if (!S.player) return;
-    const d = padDir || held[held.length - 1] || null;
-    S.player.want = d ? { ...d } : { x: 0, y: 0 };
-    if (d && S.mode === 'ready') { S.mode = 'playing'; updateHint(); }
+  // 조작(프로토타입 참조): 좌하단 4방향 십자 D-pad. 중앙 기준 우세 축 하나만(대각선 없음).
+  //   단일 방향 상태 → S.player.want 로 반영. 포인터가 있으면 포인터 우선, 없으면 키보드(최근 키).
+  const arms = {}; // dir → { arm, glyph } (D-pad 생성 후 채움)
+  function setDir(x, y) {
+    if (S.player) S.player.want = { x, y };
+    if ((x || y) && S.mode === 'ready') { S.mode = 'playing'; updateHint(); }
+    setArm('up', y < 0); setArm('down', y > 0);
+    setArm('left', x < 0); setArm('right', x > 0);
   }
-  function setPad(dir) { padDir = dir; applyWant(); }
-  function pressDir(dir) { held.push(dir); applyWant(); }
-  function releaseDir(dir) {
-    for (let i = held.length - 1; i >= 0; i--) {
-      if (held[i].x === dir.x && held[i].y === dir.y) { held.splice(i, 1); break; }
-    }
-    applyWant();
+  function setArm(dir, on) {
+    const a = arms[dir];
+    if (!a) return;
+    a.arm.classList.toggle('on', on);
+    a.glyph.classList.toggle('on', on);
   }
 
   // ----- 워프 -----
@@ -731,48 +729,49 @@ export function mount(container) {
     hint.textContent =
       S.mode === 'playing'
         ? '광석 ●을 모두 캐면 클리어 · 금색 보물 = 랜덤 효과 · 갈색 벽은 눌러서 파기'
-        : '우측 하단 십자 방향 버튼 또는 방향키로 조종합니다.';
+        : '좌하단 십자 D-pad(밀어서 한 방향씩) 또는 방향키로 조종합니다.';
   }
 
-  // ----- 조작: 우측 하단 ㅗ 방향 패드 (손 안 떼고 드래그로 방향 전환) -----
-  // 캡처를 컨테이너에 걸고, 손가락 아래 버튼을 elementFromPoint 로 판정해 방향 결정.
+  // ----- 조작: 좌하단 4방향 십자 D-pad (중앙 기준 우세 축 하나만, 데드존=정지) -----
+  const DEAD = 0.22;
   const dpad = el('div', 'dpad');
-  for (const [cls, glyph] of [['up', '▲'], ['left', '◀'], ['right', '▶'], ['down', '▼']]) {
-    const b = el('button', `dpad-btn ${cls}`);
-    b.textContent = glyph;
-    b.dataset.dir = cls; // DIRS[cls] 로 방향 조회
-    dpad.append(b);
-  }
+  dpad.innerHTML = `<svg viewBox="0 0 120 120">
+    <rect class="arm" data-dir="up"    x="42" y="4"  width="36" height="46" rx="8"/>
+    <rect class="arm" data-dir="down"  x="42" y="70" width="36" height="46" rx="8"/>
+    <rect class="arm" data-dir="left"  x="4"  y="42" width="46" height="36" rx="8"/>
+    <rect class="arm" data-dir="right" x="70" y="42" width="46" height="36" rx="8"/>
+    <rect class="hub" x="42" y="42" width="36" height="36" rx="6"/>
+    <path class="glyph" data-g="up"    d="M60 14 l7 10 h-14 z"/>
+    <path class="glyph" data-g="down"  d="M60 106 l7 -10 h-14 z"/>
+    <path class="glyph" data-g="left"  d="M14 60 l10 -7 v14 z"/>
+    <path class="glyph" data-g="right" d="M106 60 l-10 -7 v14 z"/>
+  </svg>`;
   stage.append(dpad);
+  for (const d of ['up', 'down', 'left', 'right'])
+    arms[d] = { arm: dpad.querySelector(`[data-dir="${d}"]`), glyph: dpad.querySelector(`[data-g="${d}"]`) };
 
-  let padPointer = null;
-  function padBtnAt(x, y) {
-    const t = document.elementFromPoint(x, y);
-    return t && t.closest ? t.closest('.dpad-btn') : null;
-  }
-  function padRefresh(x, y) {
-    const btn = padBtnAt(x, y);
-    if (!btn) return; // 버튼 사이 간격/바깥: 직전 방향 유지(드래그 끊김 방지). 정지는 손 뗄 때만.
-    for (const b of dpad.children) b.classList.toggle('active', b === btn);
-    setPad(DIRS[btn.dataset.dir]);
-  }
-  function padEnd(e) {
-    if (padPointer !== null && e.pointerId !== padPointer) return;
-    padPointer = null;
-    for (const b of dpad.children) b.classList.remove('active');
-    setPad(null);
+  let padPointer = null, padCx = 0, padCy = 0, padR = 0;
+  function padFromPoint(clientX, clientY) {
+    const dx = clientX - padCx, dy = clientY - padCy;
+    if (Math.hypot(dx, dy) < padR * DEAD) { setDir(0, 0); return; }   // 중앙 = 정지
+    if (Math.abs(dx) >= Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);      // 가로 우세 → 좌/우
+    else setDir(0, dy > 0 ? 1 : -1);                                   // 세로 우세 → 상/하
   }
   dpad.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     resumeAudio();
+    const r = dpad.getBoundingClientRect();
+    padCx = r.left + r.width / 2; padCy = r.top + r.height / 2; padR = r.width / 2;
     padPointer = e.pointerId;
     dpad.setPointerCapture?.(e.pointerId);
-    padRefresh(e.clientX, e.clientY);
+    padFromPoint(e.clientX, e.clientY);
   });
-  dpad.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== padPointer) return;
-    padRefresh(e.clientX, e.clientY);
-  });
+  dpad.addEventListener('pointermove', (e) => { if (e.pointerId === padPointer) padFromPoint(e.clientX, e.clientY); });
+  function padEnd(e) {
+    if (padPointer === null || e.pointerId !== padPointer) return;
+    padPointer = null;
+    applyKeys(); // 손 떼면 키보드 상태로 복귀(없으면 정지)
+  }
   dpad.addEventListener('pointerup', padEnd);
   dpad.addEventListener('pointercancel', padEnd);
 
@@ -782,17 +781,32 @@ export function mount(container) {
     if (S.mode === 'won' || S.mode === 'lost') resetGame();
   }
 
-  // ----- 키보드 -----
+  // ----- 키보드: 나중에 누른 키가 이김(4방향답게) -----
   const KEYMAP = {
-    ArrowUp: DIRS.up, ArrowDown: DIRS.down, ArrowLeft: DIRS.left, ArrowRight: DIRS.right,
-    w: DIRS.up, s: DIRS.down, a: DIRS.left, d: DIRS.right,
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right',
   };
+  const keyStack = [];
+  function applyKeys() {
+    if (padPointer !== null) return; // 포인터 조작 중이면 무시
+    if (keyStack.length === 0) { setDir(0, 0); return; }
+    const d = DIRS[keyStack[keyStack.length - 1]];
+    setDir(d.x, d.y);
+  }
   function onKeyDown(e) {
-    if (KEYMAP[e.key]) { e.preventDefault(); if (!e.repeat) pressDir(KEYMAP[e.key]); }
-    else if ((e.key === 'Enter' || e.key === ' ') && (S.mode === 'won' || S.mode === 'lost')) resetGame();
+    const dir = KEYMAP[e.key];
+    if (dir) {
+      e.preventDefault();
+      if (!keyStack.includes(dir)) keyStack.push(dir);
+      applyKeys();
+    } else if ((e.key === 'Enter' || e.key === ' ') && (S.mode === 'won' || S.mode === 'lost')) resetGame();
   }
   function onKeyUp(e) {
-    if (KEYMAP[e.key]) releaseDir(KEYMAP[e.key]);
+    const dir = KEYMAP[e.key];
+    if (!dir) return;
+    const i = keyStack.indexOf(dir);
+    if (i >= 0) keyStack.splice(i, 1);
+    applyKeys();
   }
 
   // ----- 시작 -----

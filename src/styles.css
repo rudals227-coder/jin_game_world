@@ -347,44 +347,28 @@ button.toggle.active {
   pointer-events: none;
 }
 
-/* ---------- mining 조작: 우측 하단 ㅗ 모양 방향 패드 ---------- */
+/* ---------- mining 조작: 좌하단 4방향 십자 D-pad (SVG) ---------- */
 .dpad {
   position: absolute;
-  right: calc(24px + var(--safe-right));
-  bottom: calc(24px + var(--safe-bottom));
-  display: grid;
-  grid-template-columns: repeat(3, 58px);
-  grid-template-rows: repeat(2, 58px);
-  gap: 6px;
+  left: calc(24px + var(--safe-left));
+  bottom: calc(26px + var(--safe-bottom));
+  width: 168px;
+  height: 168px;
   z-index: 2;
   touch-action: none;
   user-select: none;
 }
-.dpad-btn {
-  padding: 0;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(30, 36, 48, 0.6);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 24px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-  touch-action: none;
-  user-select: none;
+.dpad svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.dpad .arm {
+  fill: rgba(27, 32, 41, 0.85);
+  stroke: #333c49;
+  stroke-width: 1.5;
+  transition: fill 0.06s linear;
 }
-.dpad-btn.active {
-  background: rgba(79, 140, 255, 0.85);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-/* ㅗ 배치: 위 ▲ 한 개 + 아래줄 ◀ ▼ ▶ */
-.dpad-btn.up { grid-column: 2; grid-row: 1; }
-.dpad-btn.left { grid-column: 1; grid-row: 2; }
-.dpad-btn.down { grid-column: 2; grid-row: 2; }
-.dpad-btn.right { grid-column: 3; grid-row: 2; }
+.dpad .arm.on { fill: #8b7cf6; }
+.dpad .glyph { fill: #6b7684; transition: fill 0.06s linear; }
+.dpad .glyph.on { fill: #ffffff; }
+.dpad .hub { fill: #12161d; stroke: #333c49; stroke-width: 1.5; }
 
 /* ---------- scorched(탱크 배틀) 조작 패널: 캔버스와 겹치지 않는 하단 전용 공간 ---------- */
 .scorched-controls {
