@@ -385,6 +385,77 @@ button.toggle.active {
 .dpad-btn.left { grid-column: 1; grid-row: 2; }
 .dpad-btn.down { grid-column: 2; grid-row: 2; }
 .dpad-btn.right { grid-column: 3; grid-row: 2; }
+
+/* ---------- scorched(탱크 배틀) 조작 패널 ---------- */
+.scorched-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px calc(14px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(14px + var(--safe-left));
+  background: linear-gradient(to top, rgba(10, 13, 20, 0.92), rgba(10, 13, 20, 0));
+  --pc: #4dabf7;
+}
+.scorched-controls.locked { opacity: 0.45; pointer-events: none; }
+.sc-sliders { display: flex; gap: 16px; flex-wrap: wrap; }
+.sc-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 180px; }
+.sc-lab { font-size: 13px; color: var(--muted); width: 34px; }
+.sc-val { font-size: 14px; font-weight: 700; width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.sc-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  touch-action: none;
+}
+.sc-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--pc);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.sc-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--pc);
+}
+.sc-weapons { display: flex; gap: 6px; flex-wrap: wrap; }
+.sc-weapon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 8px;
+  min-width: 62px;
+  border-radius: 10px;
+  background: rgba(30, 36, 48, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  line-height: 1.1;
+}
+.sc-weapon .wi { font-size: 18px; }
+.sc-weapon .wn { font-size: 11px; color: var(--muted); }
+.sc-weapon .wa { font-size: 11px; font-weight: 700; }
+.sc-weapon.sel { border-color: var(--pc); background: rgba(79, 140, 255, 0.18); }
+.sc-weapon:disabled { opacity: 0.35; }
+.sc-fire {
+  align-self: stretch;
+  font-size: 17px;
+  font-weight: 800;
+  padding: 12px;
+  background: var(--pc);
+  color: #0b0e14;
+}
 .lander-controls .ctrl {
   pointer-events: auto;
   width: 74px;

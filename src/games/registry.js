@@ -48,6 +48,16 @@ export const games = [
     cover: miningCover,
     load: () => import('./mining/index.js'),
   },
+  {
+    id: 'scorched',
+    title: '탱크 배틀',
+    desc: '각도·파워·바람을 계산해 포격.',
+    tagline: '번갈아 조준해 포탄을 쏘고 지형을 파괴하며 상대 탱크를 먼저 격파하세요. 특수포탄으로 매 판이 다릅니다.',
+    tags: ['포격', '2인 대전', '터치'],
+    accent: '#ffb648',
+    cover: scorchedCover,
+    load: () => import('./scorched/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -232,6 +242,60 @@ function miningCover(uid = 'm') {
       <rect x="-16" y="-13" width="32" height="4.5" rx="2" fill="#ffcc33"/>
       <circle cx="9" cy="-14" r="3" fill="#fff6c0"/>
     </g>
+  </svg>`;
+}
+
+// 탱크 배틀: 언덕 지형 + 탱크 2대 + 포물선 궤적 + 폭발.
+function scorchedCover(uid = 's') {
+  const W = 400;
+  const H = 240;
+  // 언덕 지형(사인풍 폴리곤)
+  let d = 'M0,240 L0,170';
+  for (let x = 0; x <= W; x += 20) {
+    const y = 165 - Math.sin(x / 55) * 20 - Math.sin(x / 23) * 8;
+    d += ` L${x},${Math.round(y)}`;
+  }
+  d += ` L${W},240 Z`;
+  // 포물선 궤적 점선
+  let arc = '';
+  for (let i = 0; i <= 18; i++) {
+    const tt = i / 18;
+    const x = 70 + tt * 230;
+    const y = 150 - Math.sin(tt * Math.PI) * 110;
+    arc += `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="2.4" fill="#ffd86b" fill-opacity="${(0.3 + tt * 0.6).toFixed(2)}"/>`;
+  }
+  const tank = (x, y, c, dark, ang) => {
+    const bx = Math.cos(ang) * 22, by = -Math.sin(ang) * 22;
+    return `<g transform="translate(${x},${y})">
+      <line x1="0" y1="-8" x2="${bx.toFixed(0)}" y2="${(-8 + by).toFixed(0)}" stroke="#cfd6e0" stroke-width="4" stroke-linecap="round"/>
+      <rect x="-22" y="-9" width="44" height="18" rx="5" fill="${c}"/>
+      <path d="M-11,-9 A11,9 0 0 1 11,-9 Z" fill="${dark}"/>
+      <circle cx="-12" cy="9" r="4.5" fill="#20242e"/><circle cx="0" cy="9" r="4.5" fill="#20242e"/><circle cx="12" cy="9" r="4.5" fill="#20242e"/>
+    </g>`;
+  };
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ssky-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1a2740"/>
+        <stop offset="1" stop-color="#0b1018"/>
+      </linearGradient>
+      <linearGradient id="sground-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6b4a2c"/>
+        <stop offset="1" stop-color="#3c2a19"/>
+      </linearGradient>
+      <radialGradient id="sboom-${uid}" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#fff2b0"/>
+        <stop offset="0.5" stop-color="#ff7a3d"/>
+        <stop offset="1" stop-color="#ff7a3d" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#ssky-${uid})"/>
+    ${arc}
+    <path d="${d}" fill="url(#sground-${uid})"/>
+    <path d="M0,168 L400,150" stroke="#7ec86a" stroke-width="0" fill="none"/>
+    ${tank(70, 150, '#4dabf7', '#2f6bd6', 1.0)}
+    ${tank(320, 152, '#ff6b5a', '#d8412f', 2.1)}
+    <circle cx="300" cy="70" r="26" fill="url(#sboom-${uid})"/>
   </svg>`;
 }
 
