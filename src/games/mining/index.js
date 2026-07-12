@@ -153,14 +153,16 @@ export function mount(container) {
     S.frightTimer = 0;
   }
 
-  // 조작: 우측 하단 십자 방향 패드 + PC 방향키 → want 로 통합. 누르는 동안만 이동.
-  const held = []; // 눌린 방향 스택(패드 버튼 + 키보드)
+  // 조작: 우측 하단 ㅗ 방향 패드(드래그로 방향 전환) + PC 방향키 → want 로 통합.
+  const held = []; // 키보드로 눌린 방향 스택
+  let padDir = null; // 방향 패드 현재 방향(드래그 중인 버튼) — 패드가 우선
   function applyWant() {
     if (!S.player) return;
-    const d = held[held.length - 1] || null;
+    const d = padDir || held[held.length - 1] || null;
     S.player.want = d ? { ...d } : { x: 0, y: 0 };
     if (d && S.mode === 'ready') { S.mode = 'playing'; updateHint(); }
   }
+  function setPad(dir) { padDir = dir; applyWant(); }
   function pressDir(dir) { held.push(dir); applyWant(); }
   function releaseDir(dir) {
     for (let i = held.length - 1; i >= 0; i--) {
@@ -732,39 +734,47 @@ export function mount(container) {
         : '우측 하단 십자 방향 버튼 또는 방향키로 조종합니다.';
   }
 
-  // ----- 조작: 우측 하단 십자(ㅗ) 방향 패드 (상하좌우 버튼) -----
+  // ----- 조작: 우측 하단 ㅗ 방향 패드 (손 안 떼고 드래그로 방향 전환) -----
+  // 캡처를 컨테이너에 걸고, 손가락 아래 버튼을 elementFromPoint 로 판정해 방향 결정.
   const dpad = el('div', 'dpad');
-  const PAD = [
-    ['up', '▲', DIRS.up],
-    ['left', '◀', DIRS.left],
-    ['right', '▶', DIRS.right],
-    ['down', '▼', DIRS.down],
-  ];
-  for (const [cls, glyph, dir] of PAD) {
+  for (const [cls, glyph] of [['up', '▲'], ['left', '◀'], ['right', '▶'], ['down', '▼']]) {
     const b = el('button', `dpad-btn ${cls}`);
     b.textContent = glyph;
-    let pressed = false; // 중복 pressDir 방지
-    const down = (e) => {
-      e.preventDefault();
-      resumeAudio();
-      if (pressed) return;
-      pressed = true;
-      b.classList.add('active');
-      b.setPointerCapture?.(e.pointerId);
-      pressDir(dir);
-    };
-    const up = () => {
-      if (!pressed) return;
-      pressed = false;
-      b.classList.remove('active');
-      releaseDir(dir);
-    };
-    b.addEventListener('pointerdown', down);
-    b.addEventListener('pointerup', up);
-    b.addEventListener('pointercancel', up);
+    b.dataset.dir = cls; // DIRS[cls] 로 방향 조회
     dpad.append(b);
   }
   stage.append(dpad);
+
+  let padPointer = null;
+  function padBtnAt(x, y) {
+    const t = document.elementFromPoint(x, y);
+    return t && t.closest ? t.closest('.dpad-btn') : null;
+  }
+  function padRefresh(x, y) {
+    const btn = padBtnAt(x, y);
+    if (!btn) return; // 버튼 사이 간격/바깥: 직전 방향 유지(드래그 끊김 방지). 정지는 손 뗄 때만.
+    for (const b of dpad.children) b.classList.toggle('active', b === btn);
+    setPad(DIRS[btn.dataset.dir]);
+  }
+  function padEnd(e) {
+    if (padPointer !== null && e.pointerId !== padPointer) return;
+    padPointer = null;
+    for (const b of dpad.children) b.classList.remove('active');
+    setPad(null);
+  }
+  dpad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    resumeAudio();
+    padPointer = e.pointerId;
+    dpad.setPointerCapture?.(e.pointerId);
+    padRefresh(e.clientX, e.clientY);
+  });
+  dpad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== padPointer) return;
+    padRefresh(e.clientX, e.clientY);
+  });
+  dpad.addEventListener('pointerup', padEnd);
+  dpad.addEventListener('pointercancel', padEnd);
 
   // ----- 탭(캔버스): 재시작 -----
   function onCanvasPointerDown() {
