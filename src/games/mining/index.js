@@ -1,6 +1,6 @@
 // 광산 채굴(팩맨 스타일). 미로 이동 + 수집 + 몬스터 회피 + 파워업 역공 + 벽 파기.
 // 게임 모듈 계약: mount(container) → unmount().
-// 조작: 좌하단 원형 조이스틱(밀어서 상하좌우) + PC 방향키. 목표: 모든 광석 수집.
+// 조작: 우측 하단 십자(ㅗ) 방향 패드(상하좌우 버튼) + PC 방향키. 목표: 모든 광석 수집.
 import { createCanvas } from '../../engine/canvas.js';
 import { createLoop } from '../../engine/loop.js';
 import { sfx, resumeAudio, createMuteButton } from '../../engine/audio.js';
@@ -153,12 +153,11 @@ export function mount(container) {
     S.frightTimer = 0;
   }
 
-  // 조작: 좌하단 조이스틱(원형) + PC 방향키 → want 로 통합. 누르는 동안만 이동.
-  const held = []; // 키보드로 눌린 방향 스택
-  let joyDir = null; // 조이스틱 현재 방향 ({x,y} 또는 null)
+  // 조작: 우측 하단 십자 방향 패드 + PC 방향키 → want 로 통합. 누르는 동안만 이동.
+  const held = []; // 눌린 방향 스택(패드 버튼 + 키보드)
   function applyWant() {
     if (!S.player) return;
-    const d = joyDir || held[held.length - 1] || null;
+    const d = held[held.length - 1] || null;
     S.player.want = d ? { ...d } : { x: 0, y: 0 };
     if (d && S.mode === 'ready') { S.mode = 'playing'; updateHint(); }
   }
@@ -169,7 +168,6 @@ export function mount(container) {
     }
     applyWant();
   }
-  function setJoystick(dir) { joyDir = dir; applyWant(); }
 
   // ----- 워프 -----
   function maybeWarp(e, c, r) {
@@ -731,49 +729,42 @@ export function mount(container) {
     hint.textContent =
       S.mode === 'playing'
         ? '광석 ●을 모두 캐면 클리어 · 금색 보물 = 랜덤 효과 · 갈색 벽은 눌러서 파기'
-        : '좌하단 조이스틱(밀어서 이동) 또는 방향키로 조종합니다.';
+        : '우측 하단 십자 방향 버튼 또는 방향키로 조종합니다.';
   }
 
-  // ----- 조작: 좌하단 원형 조이스틱 (상하좌우 통합) -----
-  const joy = el('div', 'joystick');
-  const knob = el('div', 'joystick-knob');
-  joy.append(knob);
-  stage.append(joy);
-  let joyActive = false;
-  function joyUpdate(e) {
-    const rect = joy.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = e.clientX - cx;
-    const dy = e.clientY - cy;
-    const dist = Math.hypot(dx, dy);
-    const radius = rect.width / 2;
-    // 노브 시각 이동 (반경 내로 제한)
-    const k = Math.min(dist, radius * 0.62);
-    const ang = Math.atan2(dy, dx);
-    knob.style.transform = dist > 0.5 ? `translate(${Math.cos(ang) * k}px, ${Math.sin(ang) * k}px)` : 'translate(0,0)';
-    // 방향 결정 (중심 근처는 정지, 아니면 가장 가까운 상하좌우)
-    if (dist < radius * 0.28) { setJoystick(null); return; }
-    if (Math.abs(dx) >= Math.abs(dy)) setJoystick(dx > 0 ? DIRS.right : DIRS.left);
-    else setJoystick(dy > 0 ? DIRS.down : DIRS.up);
+  // ----- 조작: 우측 하단 십자(ㅗ) 방향 패드 (상하좌우 버튼) -----
+  const dpad = el('div', 'dpad');
+  const PAD = [
+    ['up', '▲', DIRS.up],
+    ['left', '◀', DIRS.left],
+    ['right', '▶', DIRS.right],
+    ['down', '▼', DIRS.down],
+  ];
+  for (const [cls, glyph, dir] of PAD) {
+    const b = el('button', `dpad-btn ${cls}`);
+    b.textContent = glyph;
+    let pressed = false; // 중복 pressDir 방지
+    const down = (e) => {
+      e.preventDefault();
+      resumeAudio();
+      if (pressed) return;
+      pressed = true;
+      b.classList.add('active');
+      b.setPointerCapture?.(e.pointerId);
+      pressDir(dir);
+    };
+    const up = () => {
+      if (!pressed) return;
+      pressed = false;
+      b.classList.remove('active');
+      releaseDir(dir);
+    };
+    b.addEventListener('pointerdown', down);
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    dpad.append(b);
   }
-  function joyEnd() {
-    joyActive = false;
-    joy.classList.remove('active');
-    knob.style.transform = 'translate(0,0)';
-    setJoystick(null);
-  }
-  joy.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    resumeAudio();
-    joyActive = true;
-    joy.setPointerCapture?.(e.pointerId);
-    joy.classList.add('active');
-    joyUpdate(e);
-  });
-  joy.addEventListener('pointermove', (e) => { if (joyActive) joyUpdate(e); });
-  joy.addEventListener('pointerup', joyEnd);
-  joy.addEventListener('pointercancel', joyEnd);
+  stage.append(dpad);
 
   // ----- 탭(캔버스): 재시작 -----
   function onCanvasPointerDown() {

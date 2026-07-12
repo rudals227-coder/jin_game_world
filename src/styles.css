@@ -347,37 +347,43 @@ button.toggle.active {
   pointer-events: none;
 }
 
-/* ---------- mining 조작: 좌하단 원형 조이스틱 ---------- */
-.joystick {
+/* ---------- mining 조작: 우측 하단 십자(ㅗ) 방향 패드 ---------- */
+.dpad {
   position: absolute;
-  left: calc(24px + var(--safe-left));
+  right: calc(24px + var(--safe-right));
   bottom: calc(24px + var(--safe-bottom));
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  background: rgba(30, 36, 48, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(3, 58px);
+  gap: 6px;
   z-index: 2;
   touch-action: none;
   user-select: none;
 }
-.joystick.active {
-  background: rgba(30, 36, 48, 0.7);
+.dpad-btn {
+  padding: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(30, 36, 48, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  touch-action: none;
+  user-select: none;
 }
-.joystick-knob {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
+.dpad-btn.active {
   background: rgba(79, 140, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-  transition: transform 0.05s linear;
-  pointer-events: none;
+  border-color: rgba(255, 255, 255, 0.3);
 }
+.dpad-btn.up { grid-column: 2; grid-row: 1; }
+.dpad-btn.left { grid-column: 1; grid-row: 2; }
+.dpad-btn.right { grid-column: 3; grid-row: 2; }
+.dpad-btn.down { grid-column: 2; grid-row: 3; }
 .lander-controls .ctrl {
   pointer-events: auto;
   width: 74px;
