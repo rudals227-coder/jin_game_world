@@ -347,14 +347,14 @@ button.toggle.active {
   pointer-events: none;
 }
 
-/* ---------- mining 조작: 우측 하단 십자(ㅗ) 방향 패드 ---------- */
+/* ---------- mining 조작: 우측 하단 ㅗ 모양 방향 패드 ---------- */
 .dpad {
   position: absolute;
   right: calc(24px + var(--safe-right));
   bottom: calc(24px + var(--safe-bottom));
   display: grid;
   grid-template-columns: repeat(3, 58px);
-  grid-template-rows: repeat(3, 58px);
+  grid-template-rows: repeat(2, 58px);
   gap: 6px;
   z-index: 2;
   touch-action: none;
@@ -380,10 +380,11 @@ button.toggle.active {
   background: rgba(79, 140, 255, 0.85);
   border-color: rgba(255, 255, 255, 0.3);
 }
+/* ㅗ 배치: 위 ▲ 한 개 + 아래줄 ◀ ▼ ▶ */
 .dpad-btn.up { grid-column: 2; grid-row: 1; }
 .dpad-btn.left { grid-column: 1; grid-row: 2; }
+.dpad-btn.down { grid-column: 2; grid-row: 2; }
 .dpad-btn.right { grid-column: 3; grid-row: 2; }
-.dpad-btn.down { grid-column: 2; grid-row: 3; }
 .lander-controls .ctrl {
   pointer-events: auto;
   width: 74px;
