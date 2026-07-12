@@ -347,44 +347,36 @@ button.toggle.active {
   pointer-events: none;
 }
 
-/* ---------- mining 조작: 좌하단 위/아래, 우하단 좌/우 ---------- */
-.dpad-split {
+/* ---------- mining 조작: 좌하단 원형 조이스틱 ---------- */
+.joystick {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(16px + var(--safe-bottom));
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding: 0 calc(18px + var(--safe-right)) 0 calc(18px + var(--safe-left));
-  pointer-events: none;
-  z-index: 2;
-}
-.dpad-split .pad-group {
-  display: flex;
-  gap: 10px;
-  pointer-events: none;
-}
-.dpad-split .pad-group.vertical { flex-direction: column; }
-.dpad-split .pad {
-  pointer-events: auto;
-  width: 66px;
-  height: 66px;
+  left: calc(24px + var(--safe-left));
+  bottom: calc(24px + var(--safe-bottom));
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgba(30, 36, 48, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 36, 48, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
-  color: #fff;
-  font-size: 24px;
-  backdrop-filter: blur(4px);
+  z-index: 2;
   touch-action: none;
   user-select: none;
 }
-.dpad-split .pad.active {
+.joystick.active {
+  background: rgba(30, 36, 48, 0.7);
+}
+.joystick-knob {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
   background: rgba(79, 140, 255, 0.85);
-  transform: scale(0.94);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 0.05s linear;
+  pointer-events: none;
 }
 .lander-controls .ctrl {
   pointer-events: auto;
