@@ -16,6 +16,11 @@ export const SPECIALS = [
   { id: 'bouncer', name: '튕김탄',     icon: '🏀', radius: 34,  damage: 32, desc: '지형을 튕기다 폭발', bounce: 2 },
   { id: 'heavy',   name: '철갑탄',     icon: '🔩', radius: 20,  damage: 58, desc: '좁지만 강력한 직격탄' },
   { id: 'nuke',    name: '핵탄',       icon: '☢️', radius: 118, damage: 80, desc: '초대형 폭발(1발 한정)', nuke: true },
+  { id: 'napalm',  name: '네이팜탄',   icon: '🔥', radius: 24,  damage: 20, desc: '착탄 지점에 6연속 폭발 카펫', scatter: 6 },
+  { id: 'dive',    name: '급강하탄',   icon: '🪂', radius: 34,  damage: 40, desc: '정점에서 수직 급강하(벽 너머 정밀타)', dive: true },
+  { id: 'digger',  name: '굴착탄',     icon: '🕳', radius: 92,  damage: 12, desc: '지형을 크게 파내 추락 유도' },
+  { id: 'penta',   name: '오연포',     icon: '✋', radius: 24,  damage: 20, desc: '한 번에 5발 부채꼴 발사', volley: 5 },
+  { id: 'storm',   name: '폭풍탄',     icon: '🌪', radius: 18,  damage: 13, desc: '공중에서 7발로 광범위 분열', split: 7 },
 ];
 
 // 특수탄 3종을 뽑아 각 2~3발 지급(핵탄은 1발).

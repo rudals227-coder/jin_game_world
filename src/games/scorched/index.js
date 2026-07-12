@@ -142,7 +142,7 @@ export function mount(container) {
     return {
       x, y, vx, vy, w,
       t: 0, armed: false, trail: [],
-      split: false, rolling: false, rollDist: 0, rollDir: 1, bounces: 0,
+      split: false, rolling: false, rollDist: 0, rollDir: 1, bounces: 0, dived: false,
     };
   }
 
@@ -167,6 +167,12 @@ export function mount(container) {
           S.shots.push(c);
         }
         continue;
+      }
+      // 급강하탄: 정점에서 수평속도를 죽이고 수직으로 급강하
+      if (s.w.dive && !s.dived && s.vy >= 0) {
+        s.dived = true;
+        s.vx *= 0.12;
+        if (s.vy < 140) s.vy = 140;
       }
       s.vx += S.wind * WIND_ACC * dt;
       s.vy += GRAVITY * dt;
@@ -234,6 +240,20 @@ export function mount(container) {
     s.dead = true;
     const w = s.w;
     const r = w.radius;
+    if (w.scatter) {
+      // 네이팜: 착탄 지점 좌우로 여러 발 연속 폭발(지면 기준 카펫)
+      const n = w.scatter;
+      for (let k = 0; k < n; k++) {
+        const ox = Math.max(0, Math.min(WORLD_W, x + (k - (n - 1) / 2) * (r * 1.2)));
+        const oy = surfaceY(S.terrain, ox);
+        carveCircle(S.terrain, ox, oy, r);
+        applyDamage(ox, oy, r, w.damage);
+        spawnBurst(ox, oy, r, '#ff9a3d');
+      }
+      boom(0.9);
+      S.shake = 26;
+      return;
+    }
     if (w.dirt) {
       addDirt(S.terrain, x, r);       // 흙 쌓기(데미지 없음)
       spawnBurst(x, y, r, '#a9763f');
