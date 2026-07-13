@@ -370,6 +370,53 @@ button.toggle.active {
 .dpad .glyph.on { fill: #ffffff; }
 .dpad .hub { fill: #12161d; stroke: #333c49; stroke-width: 1.5; }
 
+/* ---------- 쿤판 클리어 이동기록 패널 ---------- */
+.solve-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 9, 14, 0.72);
+  z-index: 3;
+  padding: 16px;
+}
+.solve-card {
+  background: #191d26;
+  border: 1px solid #2a2f3b;
+  border-radius: 16px;
+  padding: 18px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 82%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+.solve-title { font-size: 24px; font-weight: 800; color: #ffd86b; text-align: center; }
+.solve-sub { color: var(--muted); text-align: center; font-size: 14px; }
+.solve-moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #12151c;
+  border-radius: 10px;
+  align-content: flex-start;
+}
+.move-chip {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e7ebf2;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.solve-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
 /* ---------- scorched(탱크 배틀) 조작 패널: 캔버스와 겹치지 않는 하단 전용 공간 ---------- */
 .scorched-controls {
   flex: 0 0 auto;

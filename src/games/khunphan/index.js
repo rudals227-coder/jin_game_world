@@ -41,6 +41,7 @@ export function mount(container) {
     editorKind: 'big',
     solved: false,
     message: '',
+    moves: [], // 풀기 모드 이동 기록: [{ id, dx, dy, cells }]
   };
 
   // 화면에 그려진 보드 기하 (포인터→칸 변환에 사용, 매 프레임 갱신)
@@ -153,6 +154,7 @@ export function mount(container) {
   function setMode(mode) {
     state.mode = mode;
     state.message = '';
+    hideSolvePanel();
     if (mode === 'editor') {
       // 에디터는 빈 배치로 시작 (사용자가 직접 문제를 만든다)
       state.pieces = emptyLayout();
@@ -184,7 +186,51 @@ export function mount(container) {
     state.pieces = clonePieces(state.base);
     state.solved = false;
     state.message = '';
+    state.moves = [];
+    hideSolvePanel();
     renderHint();
+  }
+
+  // ----- 이동 기록 + 클리어 패널 -----
+  let solvePanel = null;
+  function labelFor(id) {
+    const idx = state.pieces.findIndex((q) => q.id === id);
+    return idx < 0 ? '?' : idx < 26 ? String.fromCharCode(65 + idx) : 'Z' + (idx - 25);
+  }
+  function recordMove(piece, dx, dy) {
+    const last = state.moves[state.moves.length - 1];
+    if (last && last.id === piece.id && last.dx === dx && last.dy === dy) last.cells++;
+    else state.moves.push({ id: piece.id, dx, dy, cells: 1 });
+  }
+  function hideSolvePanel() {
+    if (solvePanel) { solvePanel.remove(); solvePanel = null; }
+  }
+  function showSolvePanel() {
+    hideSolvePanel();
+    const panel = el('div', 'solve-panel');
+    const card = el('div', 'solve-card');
+    const title = el('div', 'solve-title');
+    title.textContent = '🎉 클리어!';
+    const sub = el('div', 'solve-sub');
+    sub.textContent = `총 ${state.moves.length}수 · 이동 기록`;
+    const list = el('div', 'solve-moves');
+    state.moves.forEach((m, i) => {
+      const arrow = m.dx > 0 ? '→' : m.dx < 0 ? '←' : m.dy > 0 ? '↓' : '↑';
+      const chip = el('span', 'move-chip');
+      chip.textContent = `${i + 1}.${labelFor(m.id)}${arrow}${m.cells > 1 ? '×' + m.cells : ''}`;
+      list.append(chip);
+    });
+    if (state.moves.length === 0) list.textContent = '(이동 없음)';
+    const btns = el('div', 'solve-btns');
+    btns.append(
+      button('🎲 새 문제', newRandomPuzzle, 'primary'),
+      button('다시 시작', resetPlay),
+      button('닫기', hideSolvePanel)
+    );
+    card.append(title, sub, list, btns);
+    panel.append(card);
+    stage.append(panel);
+    solvePanel = panel;
   }
 
   function loadEditor(layout) {
@@ -279,11 +325,11 @@ export function mount(container) {
       const horizontal = Math.abs(dxpix) >= Math.abs(dypix);
       if (horizontal && Math.abs(dxpix) >= cell * 0.5) {
         const dir = Math.sign(dxpix);
-        if (shift(state.pieces, drag.piece, dir, 0)) { drag.anchorX += dir * cell; sfx.slide(); }
+        if (shift(state.pieces, drag.piece, dir, 0)) { drag.anchorX += dir * cell; sfx.slide(); recordMove(drag.piece, dir, 0); }
         else break;
       } else if (!horizontal && Math.abs(dypix) >= cell * 0.5) {
         const dir = Math.sign(dypix);
-        if (shift(state.pieces, drag.piece, 0, dir)) { drag.anchorY += dir * cell; sfx.slide(); }
+        if (shift(state.pieces, drag.piece, 0, dir)) { drag.anchorY += dir * cell; sfx.slide(); recordMove(drag.piece, 0, dir); }
         else break;
       } else {
         break;
@@ -294,6 +340,7 @@ export function mount(container) {
       drag = null;
       sfx.win();
       renderHint();
+      showSolvePanel();
     }
   }
 
@@ -362,9 +409,7 @@ export function mount(container) {
       ? [...state.pieces.filter((p) => p !== drag.piece), drag.piece]
       : state.pieces;
     for (const p of ordered) drawPiece(ctx, p, cell, offsetX, offsetY, p === drag?.piece);
-
-    if (state.mode === 'play' && state.solved)
-      drawSolvedOverlay(ctx, offsetX, offsetY, boardW, boardH, now);
+    // 클리어 표시/이동기록은 DOM 패널(showSolvePanel)이 담당
   }
 
   // 나무 프레임
@@ -483,6 +528,20 @@ export function mount(container) {
       ctx.shadowBlur = cell * 0.3;
       ctx.stroke();
       ctx.restore();
+    }
+
+    // 말 라벨 (A, B, C ... 배치/등록 순서) — 풀이 기록용
+    const idx = state.pieces.findIndex((q) => q.id === p.id);
+    if (idx >= 0) {
+      const label = idx < 26 ? String.fromCharCode(65 + idx) : 'Z' + (idx - 25);
+      ctx.font = `700 ${Math.floor(Math.min(rw, rh) * 0.5)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const lx = x + w / 2, ly = y + h / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillText(label, lx, ly + 1.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillText(label, lx, ly);
     }
   }
 
