@@ -88,6 +88,16 @@ export const games = [
     cover: slidenumCover,
     load: () => import('./slidenum/index.js'),
   },
+  {
+    id: 'airhockey',
+    title: '에어하키',
+    desc: '두 명이 손가락으로 즐기는 에어하키.',
+    tagline: '한 대의 아이패드를 사이에 두고 두 명이 각자 반쪽에서 손가락으로 말렛을 움직여 퍽을 상대 골대에! 7점 먼저.',
+    tags: ['2인 대전', '반사신경', '터치'],
+    accent: '#22d3ee',
+    cover: airhockeyCover,
+    load: () => import('./airhockey/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -438,6 +448,41 @@ function slidenumCover(uid = 'p') {
     <rect width="${W}" height="${H}" fill="url(#pbg-${uid})"/>
     <rect x="${ox}" y="${oy}" width="${side}" height="${side}" rx="10" fill="#1c2230"/>
     ${tiles}
+  </svg>`;
+}
+
+// 에어하키: 링크 + 중앙선/원 + 말렛 2개 + 퍽 + 위/아래 골대.
+function airhockeyCover(uid = 'a') {
+  const W = 400, H = 240;
+  const TOP = '#4dabf7', BOTTOM = '#ff6b5a';
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ah-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#14304a"/>
+        <stop offset="0.5" stop-color="#0f2338"/>
+        <stop offset="1" stop-color="#14304a"/>
+      </linearGradient>
+      <radialGradient id="ahm1-${uid}" cx="40%" cy="35%" r="70%">
+        <stop offset="0" stop-color="#9fd0ff"/><stop offset="1" stop-color="${TOP}"/>
+      </radialGradient>
+      <radialGradient id="ahm2-${uid}" cx="40%" cy="35%" r="70%">
+        <stop offset="0" stop-color="#ffb3a8"/><stop offset="1" stop-color="${BOTTOM}"/>
+      </radialGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="#0c1420"/>
+    <rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="16" fill="url(#ah-${uid})"/>
+    <line x1="12" y1="120" x2="388" y2="120" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3"/>
+    <circle cx="200" cy="120" r="42" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3"/>
+    <line x1="140" y1="8" x2="260" y2="8" stroke="${TOP}" stroke-width="7"/>
+    <line x1="140" y1="232" x2="260" y2="232" stroke="${BOTTOM}" stroke-width="7"/>
+    <!-- 말렛 -->
+    <circle cx="200" cy="52" r="26" fill="url(#ahm1-${uid})"/>
+    <circle cx="200" cy="52" r="13" fill="#fff" stroke="${TOP}" stroke-width="3"/>
+    <circle cx="200" cy="188" r="26" fill="url(#ahm2-${uid})"/>
+    <circle cx="200" cy="188" r="13" fill="#fff" stroke="${BOTTOM}" stroke-width="3"/>
+    <!-- 퍽 -->
+    <circle cx="248" cy="132" r="14" fill="#1b2430"/>
+    <circle cx="243" cy="127" r="5" fill="#ffffff" fill-opacity="0.25"/>
   </svg>`;
 }
 
