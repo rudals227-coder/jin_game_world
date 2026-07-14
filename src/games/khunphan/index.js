@@ -154,6 +154,7 @@ export function mount(container) {
   function setMode(mode) {
     state.mode = mode;
     state.message = '';
+    state.moves = []; // 모드 전환 시 이동 기록 초기화
     hideSolvePanel();
     if (mode === 'editor') {
       // 에디터는 빈 배치로 시작 (사용자가 직접 문제를 만든다)
@@ -251,6 +252,8 @@ export function mount(container) {
     state.message = '';
     state.pieces = clonePieces(state.base);
     state.solved = false;
+    state.moves = []; // 새로 풀기 시작 → 이전 기록 초기화
+    hideSolvePanel();
     renderTopbar();
     renderPalette();
     renderHint();
@@ -325,12 +328,20 @@ export function mount(container) {
       const horizontal = Math.abs(dxpix) >= Math.abs(dypix);
       if (horizontal && Math.abs(dxpix) >= cell * 0.5) {
         const dir = Math.sign(dxpix);
-        if (shift(state.pieces, drag.piece, dir, 0)) { drag.anchorX += dir * cell; sfx.slide(); recordMove(drag.piece, dir, 0); }
-        else break;
+        if (shift(state.pieces, drag.piece, dir, 0)) {
+          drag.anchorX += dir * cell;
+          drag.anchorY = pos.y; // 반대축 드리프트 리셋 (의도치 않은 수직 이동/기록 방지)
+          sfx.slide();
+          recordMove(drag.piece, dir, 0);
+        } else break;
       } else if (!horizontal && Math.abs(dypix) >= cell * 0.5) {
         const dir = Math.sign(dypix);
-        if (shift(state.pieces, drag.piece, 0, dir)) { drag.anchorY += dir * cell; sfx.slide(); recordMove(drag.piece, 0, dir); }
-        else break;
+        if (shift(state.pieces, drag.piece, 0, dir)) {
+          drag.anchorY += dir * cell;
+          drag.anchorX = pos.x; // 반대축 드리프트 리셋
+          sfx.slide();
+          recordMove(drag.piece, 0, dir);
+        } else break;
       } else {
         break;
       }
