@@ -6,7 +6,7 @@ import { createCanvas } from '../../engine/canvas.js';
 import { createLoop } from '../../engine/loop.js';
 import { sfx, resumeAudio, createMuteButton } from '../../engine/audio.js';
 import { generateTerrain, surfaceY, isSolid, carveCircle, addDirt } from './terrain.js';
-import { BASIC, rollSpecials } from './weapons.js';
+import { BASIC, SPECIALS, rollSpecials } from './weapons.js';
 
 // ----- 월드(고정 좌표계) -----
 // 캔버스 크기와 무관하게 지형은 항상 이 크기로 생성 → 리사이즈해도 스케일만 바뀜.
@@ -25,6 +25,34 @@ const ROLL_MAX = 420;     // 굴림탄 최대 이동거리
 const TANK_W = 46;
 const TANK_H = 22;
 const TANK_R = 24;        // 피격/충돌 반경
+
+// ----- 이동(턴당 제한) -----
+const MOVE_BUDGET = 135;  // 턴당 이동 가능 거리(월드 px)
+const MOVE_SPEED = 95;    // 이동 속도(px/s)
+const MAX_SLOPE = 1.15;   // 오를 수 있는 최대 경사(높이/가로). 넘으면 막힘(벽은 못 오름)
+
+// ----- 낙하 데미지 -----
+const FALL_MIN = 64;      // 이 이상 떨어져야 피해
+const FALL_RATE = 0.34;   // 초과 낙하 px당 피해
+const FALL_MAX = 44;      // 낙하 피해 상한
+
+// ----- 맵 오브젝트 -----
+const CRATE_W = 26;
+const BARREL_W = 22;
+const BARREL_R = 50;      // 드럼통 폭발 반경
+const BARREL_DMG = 34;
+
+// ----- 드래그 조준 -----
+const AIM_GRAB_R = 130;      // 탱크 근처 이 반경(월드)을 누르면 드래그 조준 시작
+const AIM_POWER_SCALE = 3.4; // 드래그 거리 → 파워
+
+// ----- 배경 테마(랜덤) -----
+const BG_THEMES = [
+  { sky: ['#3b6ea5', '#a9d4ef'], orb: { c: '#fff4c2', glow: 'rgba(255,240,180,0.5)', xy: [0.8, 0.2], r: 34 }, clouds: 4, stars: 0 },
+  { sky: ['#43305f', '#ff9e5e'], orb: { c: '#ffd98a', glow: 'rgba(255,180,110,0.55)', xy: [0.72, 0.66], r: 46 }, clouds: 3, stars: 0 },
+  { sky: ['#0a1230', '#22366b'], orb: { c: '#e8eefc', glow: 'rgba(220,230,255,0.35)', xy: [0.8, 0.22], r: 26 }, clouds: 1, stars: 70 },
+  { sky: ['#132347', '#3a5a7a'], orb: null, clouds: 2, stars: 30 },
+];
 
 const PLAYERS = [
   { name: 'P1', color: '#4dabf7', dark: '#2f6bd6' },
@@ -63,6 +91,13 @@ export function mount(container) {
     settleT: 0,
     winner: -1,
     msg: '',
+    moving: 0,   // 이동 입력 (-1/0/1)
+    time: 0,     // 배경 애니메이션 시간
+    bg: null,    // 랜덤 배경 테마
+    crates: [],  // 아이템 상자
+    barrels: [], // 폭발 드럼통
+    crateMsg: null, // 획득 안내 { text, t }
+    zones: [],   // 지속 지대(화염/독가스) [{x,y,r,kind,turns,dmg}]
   };
 
   function makePlayer(i, x) {
@@ -75,6 +110,8 @@ export function mount(container) {
       weapon: 'basic',
       inv: [{ ...BASIC, ammo: Infinity }, ...rollSpecials()],
       vy: 0, // 낙하용
+      moveLeft: MOVE_BUDGET, // 이번 턴 남은 이동 거리
+      shield: false, // 다음 피해 1회 흡수
     };
   }
 
@@ -88,7 +125,12 @@ export function mount(container) {
     S.shake = 0;
     S.winner = -1;
     S.mode = 'aim';
+    S.moving = 0;
+    S.crateMsg = null;
+    S.zones = [];
+    spawnObjects();
     rollWind();
+    rollBackground();
     S.zoom = 1;
     S.cam.x = 0; S.cam.y = 0;
     clampCam();
@@ -99,6 +141,102 @@ export function mount(container) {
 
   function rollWind() {
     S.wind = Math.round((Math.random() * 2 - 1) * 10);
+  }
+
+  function rollBackground() {
+    const th = BG_THEMES[Math.floor(Math.random() * BG_THEMES.length)];
+    const clouds = [];
+    for (let i = 0; i < th.clouds; i++)
+      clouds.push({ x: Math.random(), y: 0.08 + Math.random() * 0.32, s: 0.7 + Math.random() * 0.9, v: 6 + Math.random() * 10 });
+    const stars = [];
+    for (let i = 0; i < th.stars; i++)
+      stars.push({ x: Math.random(), y: Math.random() * 0.5, r: Math.random() * 1.3 + 0.4 });
+    S.bg = { th, clouds, stars };
+  }
+
+  // 이동(턴당 제한 + 경사 제한)
+  function moveActive(dir, dt) {
+    const p = active();
+    if (p.moveLeft <= 0) return;
+    const stepDist = Math.min(MOVE_SPEED * dt, p.moveLeft);
+    let nx = Math.max(TANK_R, Math.min(WORLD_W - TANK_R, p.x + dir * stepDist));
+    const e = enemy();
+    if (e.hp > 0 && Math.abs(nx - e.x) < TANK_W) return; // 상대와 겹침 방지
+    const dxAbs = Math.abs(nx - p.x);
+    if (dxAbs < 0.01) return;
+    const rise = surfaceY(S.terrain, p.x) - surfaceY(S.terrain, nx); // >0 = 오르막
+    if (rise > 0 && rise / dxAbs > MAX_SLOPE) return; // 너무 가파른 경사(벽)는 못 오름
+    p.x = nx;
+    p.y = restY(p); // 지면 따라 정착
+    p.moveLeft -= dxAbs;
+    if (p.moveLeft < 0) p.moveLeft = 0;
+    // 상자 밟고 지나가면 획득
+    for (const c of S.crates)
+      if (!c.taken && Math.abs(c.x - p.x) < CRATE_W / 2 + TANK_W / 2) collectCrate(c, p);
+  }
+
+  // ----- 맵 오브젝트 (상자/드럼통) -----
+  const CRATE_KINDS = ['weapon', 'heal', 'shield', 'fuel'];
+  function spawnObjects() {
+    S.crates = []; S.barrels = [];
+    const okX = (x) => S.players.every((t) => Math.abs(x - t.x) > 100);
+    const place = (lo, hi) => { let x, g = 24; do { x = WORLD_W * (lo + Math.random() * (hi - lo)); } while (!okX(x) && g-- > 0); return x; };
+    for (let i = 0, n = 2 + Math.floor(Math.random() * 2); i < n; i++)
+      S.crates.push({ x: place(0.2, 0.8), type: CRATE_KINDS[Math.floor(Math.random() * CRATE_KINDS.length)], taken: false });
+    for (let i = 0, n = 2 + Math.floor(Math.random() * 3); i < n; i++)
+      S.barrels.push({ x: place(0.15, 0.85), dead: false });
+  }
+
+  function collectCrate(c, p) {
+    if (c.taken) return;
+    c.taken = true;
+    let msg;
+    if (c.type === 'heal') { p.hp = Math.min(p.maxHp, p.hp + 30); msg = `${p.name} 회복 +30`; }
+    else if (c.type === 'shield') { p.shield = true; msg = `${p.name} 실드 획득!`; }
+    else if (c.type === 'fuel') { p.moveLeft = Math.min(MOVE_BUDGET * 1.8, p.moveLeft + 90); msg = `${p.name} 이동력 +90`; }
+    else { // weapon
+      const w = SPECIALS[Math.floor(Math.random() * SPECIALS.length)];
+      const ex = p.inv.find((it) => it.id === w.id);
+      if (ex) ex.ammo += 2; else p.inv.push({ ...w, ammo: 2 });
+      msg = `${p.name} ${w.name} 획득!`;
+    }
+    S.crateMsg = { text: msg, t: 1.8 };
+    spawnBurst(c.x, surfaceY(S.terrain, c.x) - 10, 22, '#7fd0ff');
+    sfx.explosion(0.3);
+    if (S.mode === 'aim') renderControls(); // 인벤/이동력 갱신
+  }
+
+  function explodeBarrel(b) {
+    if (b.dead) return;
+    b.dead = true;
+    const bx = b.x, by = surfaceY(S.terrain, b.x);
+    carveCircle(S.terrain, bx, by, BARREL_R);
+    applyDamage(bx, by, BARREL_R, BARREL_DMG);
+    spawnBurst(bx, by, BARREL_R, '#ff7a3d');
+    boom(0.8); S.shake = Math.max(S.shake, 22);
+    for (const o of S.barrels) // 연쇄 폭발
+      if (!o.dead && Math.abs(o.x - bx) < BARREL_R + BARREL_W) explodeBarrel(o);
+  }
+
+  // 폭발 반경 안의 상자 획득 + 드럼통 연쇄
+  function blastObjects(x, y, r) {
+    for (const c of S.crates)
+      if (!c.taken && Math.hypot(c.x - x, surfaceY(S.terrain, c.x) - y) < r + CRATE_W) collectCrate(c, active());
+    for (const b of S.barrels)
+      if (!b.dead && Math.hypot(b.x - x, surfaceY(S.terrain, b.x) - y) < r + BARREL_W) explodeBarrel(b);
+  }
+
+  // 낙하 피해 (착지 시)
+  function applyFallDamage(p, ry) {
+    const drop = ry - (p._fy0 ?? ry);
+    p._fy0 = ry;
+    if (drop <= FALL_MIN) return;
+    if (p.shield) { p.shield = false; spawnBurst(p.x, p.y - 8, 20, '#7fd0ff'); return; }
+    const dmg = Math.min(FALL_MAX, (drop - FALL_MIN) * FALL_RATE);
+    p.hp = Math.max(0, p.hp - dmg);
+    spawnBurst(p.x, p.y, 16, '#ff9a3d');
+    S.shake = Math.max(S.shake, 10);
+    if (p.hp <= 0) sfx.lose();
   }
 
   const active = () => S.players[S.turn];
@@ -121,7 +259,7 @@ export function mount(container) {
     const w = p.inv.find((it) => it.id === p.weapon) || p.inv[0];
     if (w.ammo <= 0) return;
     const a = (p.angle * Math.PI) / 180;
-    const v = (p.power / 100) * MAX_V;
+    const v = (p.power / 100) * MAX_V * (w.rail ? 1.7 : 1); // 레일건은 초고속
     const count = w.volley || 1; // 삼연포 등: 한 번에 여러 발 부채꼴
     S.shots = [];
     for (let k = 0; k < count; k++) {
@@ -132,6 +270,7 @@ export function mount(container) {
     }
     if (w.ammo !== Infinity) w.ammo -= 1;
     if (w.ammo <= 0) p.weapon = 'basic';
+    S.moving = 0;
     S.mode = 'flight';
     sfx.cannon();
     renderControls();
@@ -174,8 +313,25 @@ export function mount(container) {
         s.vx *= 0.12;
         if (s.vy < 140) s.vy = 140;
       }
-      s.vx += S.wind * WIND_ACC * dt;
-      s.vy += GRAVITY * dt;
+      // 유도탄: 정점 이후 상대 탱크 쪽으로 서서히 선회
+      if (s.w.homing && s.t > 0.35) {
+        const tgt = enemy();
+        if (tgt && tgt.hp > 0) {
+          const desired = Math.atan2(tgt.y - s.y, tgt.x - s.x);
+          const cur = Math.atan2(s.vy, s.vx);
+          let diff = desired - cur;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          const maxTurn = 2.4 * dt;
+          const na = cur + Math.max(-maxTurn, Math.min(maxTurn, diff));
+          const sp = Math.hypot(s.vx, s.vy);
+          s.vx = Math.cos(na) * sp; s.vy = Math.sin(na) * sp;
+        }
+      }
+      if (!s.w.rail) { // 레일건은 중력/바람 무시(직사)
+        s.vx += S.wind * WIND_ACC * dt;
+        s.vy += GRAVITY * dt;
+      }
       s.x += s.vx * dt;
       s.y += s.vy * dt;
       s.trail.push({ x: s.x, y: s.y });
@@ -248,10 +404,26 @@ export function mount(container) {
         const oy = surfaceY(S.terrain, ox);
         carveCircle(S.terrain, ox, oy, r);
         applyDamage(ox, oy, r, w.damage);
+        blastObjects(ox, oy, r);
         spawnBurst(ox, oy, r, '#ff9a3d');
       }
       boom(0.9);
       S.shake = 26;
+      return;
+    }
+    if (w.fire || w.gas) {
+      // 지속 지대 생성 (화염=지면 불, 독가스=떠 있는 구름)
+      if (w.fire) carveCircle(S.terrain, x, y, w.radius * 0.6);
+      applyDamage(x, y, w.radius, w.damage);
+      blastObjects(x, y, w.radius);
+      const gy = surfaceY(S.terrain, x);
+      S.zones.push({
+        x, y: w.gas ? y : gy, r: w.radius * (w.gas ? 1.5 : 1.35),
+        kind: w.gas ? 'gas' : 'fire', turns: w.gas ? 4 : 3, dmg: w.gas ? 9 : 12,
+      });
+      spawnBurst(x, gy, w.radius, w.gas ? '#8fe08f' : '#ff8a3d');
+      boom(0.45);
+      S.shake = Math.min(18, w.radius * 0.4);
       return;
     }
     if (w.dirt) {
@@ -261,6 +433,7 @@ export function mount(container) {
     } else {
       carveCircle(S.terrain, x, y, r);
       applyDamage(x, y, r, w.damage);
+      blastObjects(x, y, r);
       spawnBurst(x, y, r, '#ffcf6b');
       boom(Math.min(1, r / 60));
     }
@@ -275,14 +448,35 @@ export function mount(container) {
       const d = Math.hypot(p.x - x, p.y - y);
       const reach = r + TANK_R;
       if (d < reach) {
+        if (p.shield) { p.shield = false; spawnBurst(p.x, p.y - 8, 22, '#7fd0ff'); continue; } // 실드가 흡수
         p.hp = Math.max(0, p.hp - dmg * (1 - d / reach));
         if (p.hp <= 0) sfx.lose();
       }
     }
   }
 
+  // 지속 지대(화염/독가스) 턴 경과 처리 — 지대 안 탱크에 피해 후 지속시간 감소
+  function tickZones() {
+    for (const z of S.zones) {
+      for (const p of S.players) {
+        if (p.hp <= 0) continue;
+        if (Math.hypot(p.x - z.x, p.y - z.y) < z.r + TANK_R * 0.5) {
+          if (p.shield) { p.shield = false; spawnBurst(p.x, p.y - 8, 18, '#7fd0ff'); }
+          else {
+            p.hp = Math.max(0, p.hp - z.dmg);
+            spawnBurst(p.x, p.y - 6, 14, z.kind === 'gas' ? '#8fe08f' : '#ff8a3d');
+            if (p.hp <= 0) sfx.lose();
+          }
+        }
+      }
+      z.turns -= 1;
+    }
+    S.zones = S.zones.filter((z) => z.turns > 0);
+  }
+
   // ================= 턴 진행 =================
   function endTurnMaybe() {
+    tickZones(); // 지대 지속 피해 먼저 적용(사망 시 아래에서 종료 처리)
     // 죽은 플레이어 있으면 게임 종료
     const dead = S.players.findIndex((p) => p.hp <= 0);
     if (dead >= 0) {
@@ -295,6 +489,8 @@ export function mount(container) {
     }
     S.turn = 1 - S.turn;
     rollWind();
+    active().moveLeft = MOVE_BUDGET; // 새 턴 이동력 충전
+    S.moving = 0;
     S.mode = 'aim';
     renderControls();
     updateHint();
@@ -303,12 +499,19 @@ export function mount(container) {
   // ================= 업데이트 =================
   function update(dt) {
     dt = Math.min(dt, 0.033);
+    S.time += dt;
+    if (S.crateMsg && (S.crateMsg.t -= dt) <= 0) S.crateMsg = null;
     if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
     stepParticles(dt);
 
+    if (S.mode === 'aim' && S.moving) moveActive(S.moving, dt);
+
     if (S.mode === 'flight') {
       stepShots(dt * SIM_SPEED);
-      if (S.shots.length === 0) { S.mode = 'settle'; S.settleT = 0.7; }
+      if (S.shots.length === 0) {
+        S.mode = 'settle'; S.settleT = 0.7;
+        for (const p of S.players) p._fy0 = p.y; // 낙하 시작 높이 기록
+      }
     } else if (S.mode === 'settle') {
       // 탱크 낙하 정착
       let allRest = true;
@@ -318,7 +521,7 @@ export function mount(container) {
         if (p.y < ry - 0.5) {
           p.vy += GRAVITY * dt * SIM_SPEED;
           p.y += p.vy * dt * SIM_SPEED;
-          if (p.y >= ry) { p.y = ry; p.vy = 0; }
+          if (p.y >= ry) { p.y = ry; p.vy = 0; applyFallDamage(p, ry); } // 착지 → 낙하 피해
           else allRest = false;
         } else if (p.y > ry) {
           p.y = ry; // 흙에 묻힌 경우 지면 위로
@@ -386,12 +589,8 @@ export function mount(container) {
     update(dt);
     const { ctx, width: W, height: H } = view;
 
-    // 하늘 (여백/레터박스 포함 전체를 덮음)
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#1a2740');
-    sky.addColorStop(1, '#0b1018');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
+    // 하늘 (랜덤 배경 테마)
+    drawBackground(ctx, W, H);
 
     // 월드 좌표계로 진입 (화면 흔들림 + 줌 스케일 + 2D 카메라)
     const es = effScale();
@@ -404,6 +603,9 @@ export function mount(container) {
     ctx.translate(-S.cam.x, -S.cam.y);
 
     drawTerrain(ctx);
+    for (const b of S.barrels) if (!b.dead) drawBarrel(ctx, b);
+    for (const c of S.crates) if (!c.taken) drawCrate(ctx, c);
+    drawZones(ctx);
     for (const p of S.players) drawTank(ctx, p);
     drawParticles(ctx);
     for (const s of S.shots) drawShot(ctx, s);
@@ -413,6 +615,115 @@ export function mount(container) {
 
     drawHUD(ctx, W, H);
     if (S.mode === 'over') drawOverlay(ctx, W, H);
+  }
+
+  function drawBackground(ctx, W, H) {
+    const bg = S.bg;
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, bg.th.sky[0]);
+    sky.addColorStop(1, bg.th.sky[1]);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    // 별 (반짝임)
+    ctx.fillStyle = '#ffffff';
+    for (const s of bg.stars) {
+      ctx.globalAlpha = 0.35 + 0.5 * (0.5 + 0.5 * Math.sin(S.time * 2 + s.x * 40));
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 해/달
+    const orb = bg.th.orb;
+    if (orb) {
+      ctx.save();
+      ctx.shadowColor = orb.glow; ctx.shadowBlur = 45;
+      ctx.beginPath(); ctx.arc(orb.xy[0] * W, orb.xy[1] * H, orb.r, 0, Math.PI * 2);
+      ctx.fillStyle = orb.c; ctx.fill();
+      ctx.restore();
+    }
+    // 구름 (천천히 흐름)
+    for (const c of bg.clouds) {
+      const cx = ((c.x * (W + 260) + S.time * c.v) % (W + 260)) - 130;
+      drawCloud(ctx, cx, c.y * H, c.s);
+    }
+  }
+  function drawCloud(ctx, x, y, s) {
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, 34 * s, 15 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + 26 * s, y + 4 * s, 24 * s, 12 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - 26 * s, y + 5 * s, 22 * s, 11 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const CRATE_STYLE = {
+    weapon: { c: '#c9a24b', mark: '⚙' },
+    heal: { c: '#4bd07a', mark: '＋' },
+    shield: { c: '#4db2e6', mark: '🛡' },
+    fuel: { c: '#e6a54d', mark: '⛽' },
+  };
+  function drawCrate(ctx, c) {
+    const cx = c.x, cy = surfaceY(S.terrain, c.x) - CRATE_W / 2 - 1;
+    const st = CRATE_STYLE[c.type] || CRATE_STYLE.weapon;
+    const bob = Math.sin(S.time * 3 + c.x) * 1.5;
+    ctx.save();
+    ctx.translate(cx, cy + bob);
+    roundRect(ctx, -CRATE_W / 2, -CRATE_W / 2, CRATE_W, CRATE_W, 4);
+    const g = ctx.createLinearGradient(0, -CRATE_W / 2, 0, CRATE_W / 2);
+    g.addColorStop(0, lightenHex(st.c, 30)); g.addColorStop(1, st.c);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = `${Math.floor(CRATE_W * 0.62)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(st.mark, 0, 1);
+    ctx.restore();
+  }
+  function drawBarrel(ctx, b) {
+    const cx = b.x, base = surfaceY(S.terrain, b.x);
+    const h = 26, w = BARREL_W;
+    ctx.save();
+    ctx.translate(cx, base - h / 2 - 1);
+    const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    g.addColorStop(0, '#8a2b2b'); g.addColorStop(0.5, '#d8412f'); g.addColorStop(1, '#8a2b2b');
+    ctx.fillStyle = g;
+    roundRect(ctx, -w / 2, -h / 2, w, h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,220,90,0.9)'; // 위험 띠
+    ctx.fillRect(-w / 2, -3, w, 6);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('☢', 0, 0);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1.5;
+    roundRect(ctx, -w / 2, -h / 2, w, h, 4); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawZones(ctx) {
+    for (const z of S.zones) {
+      if (z.kind === 'gas') {
+        const pulse = 0.5 + 0.5 * Math.sin(S.time * 2 + z.x);
+        for (let i = 0; i < 5; i++) {
+          const ang = (i / 5) * Math.PI * 2 + S.time * 0.4;
+          ctx.beginPath();
+          ctx.arc(z.x + Math.cos(ang) * z.r * 0.5, z.y - 10 + Math.sin(ang) * z.r * 0.28, z.r * 0.55, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(130,220,120,${0.09 + 0.06 * pulse})`;
+          ctx.fill();
+        }
+      } else {
+        const gy = surfaceY(S.terrain, z.x);
+        for (let i = -2; i <= 2; i++) {
+          const fx = z.x + i * z.r * 0.34;
+          const h = z.r * (0.5 + 0.4 * Math.abs(Math.sin(S.time * 8 + i)));
+          const g = ctx.createLinearGradient(fx, gy, fx, gy - h);
+          g.addColorStop(0, '#ffd24a'); g.addColorStop(1, 'rgba(255,90,40,0.15)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.moveTo(fx - 7, gy);
+          ctx.quadraticCurveTo(fx, gy - h, fx + 7, gy);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
   }
 
   function drawTerrain(ctx) {
@@ -452,36 +763,69 @@ export function mount(container) {
     }
     ctx.save();
     ctx.translate(p.x, p.y);
-    // 포신
-    const a = (p.angle * Math.PI) / 180;
-    ctx.save();
-    ctx.strokeStyle = '#cfd6e0';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -TANK_H / 2 - 2);
-    ctx.lineTo(Math.cos(a) * 30, -TANK_H / 2 - 2 - Math.sin(a) * 30);
-    ctx.stroke();
-    ctx.restore();
-    // 차체
-    const g = ctx.createLinearGradient(0, -TANK_H, 0, TANK_H / 2);
-    g.addColorStop(0, p.color);
+    const half = TANK_W / 2;
+    const bodyTop = -TANK_H / 2 + 2, bodyBot = TANK_H / 2 - 8;
+
+    // 무한궤도(트랙) — 바닥 밴드 + 바퀴 + 궤도 눈금
+    ctx.fillStyle = '#23272f';
+    roundRect(ctx, -half - 2, TANK_H / 2 - 9, TANK_W + 4, 13, 6); ctx.fill();
+    ctx.fillStyle = '#12151c';
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(i * (TANK_W * 0.2), TANK_H / 2 - 3, 3.6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 7; i++) { const gx = -half + 3 + i * ((TANK_W - 6) / 7); line(ctx, gx, TANK_H / 2 - 9, gx, TANK_H / 2 + 3); }
+
+    // 차체(사다리꼴, 위가 좁음) + 그라데이션 + 하이라이트
+    const g = ctx.createLinearGradient(0, bodyTop, 0, bodyBot);
+    g.addColorStop(0, lightenHex(p.color, 28));
     g.addColorStop(1, p.dark);
     ctx.fillStyle = g;
-    roundRect(ctx, -TANK_W / 2, -TANK_H / 2, TANK_W, TANK_H, 6);
-    ctx.fill();
-    // 포탑
     ctx.beginPath();
-    ctx.arc(0, -TANK_H / 2, TANK_H * 0.5, Math.PI, 0);
+    ctx.moveTo(-half + 5, bodyTop);
+    ctx.lineTo(half - 5, bodyTop);
+    ctx.lineTo(half, bodyBot);
+    ctx.lineTo(-half, bodyBot);
+    ctx.closePath();
     ctx.fill();
-    // 바퀴
-    ctx.fillStyle = '#20242e';
-    for (let i = -1; i <= 1; i++) {
-      ctx.beginPath();
-      ctx.arc(i * TANK_W * 0.3, TANK_H / 2, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(-half + 6, bodyTop + 1, TANK_W - 12, 2.5);
+
+    // 포탑(돔)
+    const g2 = ctx.createLinearGradient(0, bodyTop - TANK_H * 0.6, 0, bodyTop);
+    g2.addColorStop(0, lightenHex(p.color, 42));
+    g2.addColorStop(1, p.color);
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.arc(0, bodyTop, TANK_H * 0.62, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 해치
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.arc(-2, bodyTop - TANK_H * 0.2, 3.2, 0, Math.PI * 2); ctx.fill();
+
+    // 포신(각도) — 맨틀렛 + 배럴 + 머즐 브레이크
+    const a = (p.angle * Math.PI) / 180;
+    ctx.save();
+    ctx.translate(0, bodyTop - 1);
+    ctx.rotate(-a);
+    ctx.fillStyle = '#3a4048';
+    roundRect(ctx, -3, -5, 11, 10, 3); ctx.fill();
+    ctx.fillStyle = '#c2c9d4';
+    roundRect(ctx, 6, -3, 26, 6, 2); ctx.fill();
+    ctx.fillStyle = '#8b94a2';
+    roundRect(ctx, 30, -4.5, 7, 9, 2); ctx.fill();
     ctx.restore();
+
+    ctx.restore();
+
+    // 실드(다음 피해 흡수) — 청록 링
+    if (p.shield) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(120,210,255,${0.55 + 0.25 * Math.sin(S.time * 5)})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - TANK_H * 0.35, TANK_R + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // 머리 위 HP 바
     const bw = 52, bh = 6, by = p.y - TANK_H - 20;
@@ -543,14 +887,16 @@ export function mount(container) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.beginPath();
-    let vx = Math.cos(a) * (p.power / 100) * MAX_V;
-    let vy = -Math.sin(a) * (p.power / 100) * MAX_V;
+    const wSel = p.inv.find((it) => it.id === p.weapon);
+    const rail = !!(wSel && wSel.rail);
+    const mul = rail ? 1.7 : 1;
+    let vx = Math.cos(a) * (p.power / 100) * MAX_V * mul;
+    let vy = -Math.sin(a) * (p.power / 100) * MAX_V * mul;
     let x = ox, y = oy;
     ctx.moveTo(x, y);
     for (let i = 0; i < 22; i++) {
       const dt = 0.05;
-      vx += S.wind * WIND_ACC * dt;
-      vy += GRAVITY * dt;
+      if (!rail) { vx += S.wind * WIND_ACC * dt; vy += GRAVITY * dt; }
       x += vx * dt; y += vy * dt;
       ctx.lineTo(x, y);
     }
@@ -567,6 +913,19 @@ export function mount(container) {
     const dir = S.wind === 0 ? '무풍' : (S.wind > 0 ? '▶'.repeat(Math.min(4, Math.ceil(Math.abs(S.wind) / 3))) : '◀'.repeat(Math.min(4, Math.ceil(Math.abs(S.wind) / 3))));
     ctx.fillText(`바람 ${Math.abs(S.wind)} ${dir}`, W / 2, 22);
 
+    // 이동 게이지(현재 턴 남은 이동력)
+    if (S.mode === 'aim') {
+      const p = active();
+      const gw = 92, gx = W / 2 - gw / 2, gy = 34;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRect(ctx, gx, gy, gw, 6, 3); ctx.fill();
+      ctx.fillStyle = p.color;
+      roundRect(ctx, gx, gy, gw * (p.moveLeft / MOVE_BUDGET), 6, 3); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '600 11px sans-serif';
+      ctx.fillText('이동력', W / 2, gy + 15);
+    }
+
     // 좌우 플레이어 이름/턴 표시
     ctx.font = '800 16px sans-serif';
     ctx.textAlign = 'left';
@@ -575,6 +934,14 @@ export function mount(container) {
     ctx.textAlign = 'right';
     ctx.fillStyle = S.players[1].color;
     ctx.fillText(`${S.turn === 1 && S.mode !== 'over' ? '턴▶ ' : ''}${S.players[1].name}`, W - 14, 22);
+
+    // 아이템 획득 안내
+    if (S.crateMsg) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(127,208,255,${Math.min(1, S.crateMsg.t)})`;
+      ctx.font = '800 18px sans-serif';
+      ctx.fillText('📦 ' + S.crateMsg.text, W / 2, 62);
+    }
   }
 
   function drawOverlay(ctx, W, H) {
@@ -595,7 +962,7 @@ export function mount(container) {
   function updateHint() {
     if (S.mode === 'over') { hint.textContent = '게임 종료 — 새 게임으로 재시작하세요.'; return; }
     if (S.mode === 'flight' || S.mode === 'settle') { hint.textContent = '포탄 비행 중…'; return; }
-    hint.textContent = `${active().name} 차례 · 아래에서 각도/파워 조절 후 발사 · 화면은 핀치 줌 / 드래그로 둘러보기`;
+    hint.textContent = `${active().name} 차례 · 탱크를 끌어 조준(또는 슬라이더) · ◀▶ 이동 · 상자📦 먹고 드럼통🛢 노리기`;
   }
 
   // ================= 조작 패널(DOM) =================
@@ -633,6 +1000,22 @@ export function mount(container) {
       weaponRow.append(b);
     }
 
+    // 이동 버튼(턴당 제한). 누르는 동안 이동.
+    const moveRow = el('div', 'sc-weapons');
+    moveRow.style.justifyContent = 'center';
+    const mkMove = (label, dir) => {
+      const b = el('button', 'sc-weapon');
+      b.innerHTML = `<span class="wi">${label}</span><span class="wn">이동</span>`;
+      b.disabled = disabled;
+      const down = (e) => { e.preventDefault(); if (S.mode === 'aim') { S.moving = dir; b.setPointerCapture?.(e.pointerId); b.classList.add('sel'); } };
+      const up = () => { if (S.moving === dir) S.moving = 0; b.classList.remove('sel'); };
+      b.addEventListener('pointerdown', down);
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', up);
+      return b;
+    };
+    moveRow.append(mkMove('◀', -1), mkMove('▶', 1));
+
     // 발사 버튼
     const fireBtn = el('button', 'sc-fire primary');
     fireBtn.textContent = '🔥 발사';
@@ -640,7 +1023,7 @@ export function mount(container) {
     fireBtn.addEventListener('click', fire);
 
     controls.style.setProperty('--pc', p.color);
-    controls.append(sliders, weaponRow, fireBtn);
+    controls.append(sliders, weaponRow, moveRow, fireBtn);
     if (disabled) controls.classList.add('locked'); else controls.classList.remove('locked');
   }
 
@@ -656,10 +1039,23 @@ export function mount(container) {
     return { row, input, val };
   }
 
-  // 캔버스 = 보기 전용(핀치 줌 + 드래그 팬). 조준/발사는 하단 패널에서.
+  // 캔버스: 탱크 근처를 끌면 조준(각도/파워), 그 외엔 핀치 줌 / 드래그 팬.
   const pointers = new Map(); // pointerId → {x,y}(캔버스 로컬)
   let pinchStart = null;      // {dist, zoom, anchor:{x,y}(월드)}
   let panLast = null;         // {x,y}(캔버스 로컬)
+  let aiming = false;         // 드래그 조준 중
+
+  // 월드 지점으로 조준값(각도/파워) 설정
+  function updateAim(wp) {
+    const p = active();
+    const mx = p.x, my = p.y - TANK_H / 2;
+    const dx = wp.x - mx, dy = wp.y - my;
+    let deg = Math.round(Math.atan2(-dy, dx) * 180 / Math.PI);
+    deg = Math.max(0, Math.min(180, deg));
+    const pow = Math.max(5, Math.min(100, Math.round(Math.hypot(dx, dy) / AIM_POWER_SCALE)));
+    p.angle = deg; p.power = pow;
+    syncSliders();
+  }
   function canvasPoint(e) {
     const r = view.canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -679,18 +1075,32 @@ export function mount(container) {
   function onCanvasDown(e) {
     resumeAudio();
     view.canvas.setPointerCapture?.(e.pointerId);
-    pointers.set(e.pointerId, canvasPoint(e));
+    const cp = canvasPoint(e);
+    pointers.set(e.pointerId, cp);
     if (pointers.size === 2) {
       const m = pinchMid();
       pinchStart = { dist: pinchDist(), zoom: S.zoom, anchor: toWorld(m.x, m.y) };
       panLast = null;
-    } else if (pointers.size === 1) {
-      panLast = canvasPoint(e);
+      aiming = false; // 두 손가락이면 조준 취소하고 줌
+      return;
     }
+    // 한 손가락: 탱크 근처면 조준, 아니면 팬
+    if (S.mode === 'aim') {
+      const wp = toWorld(cp.x, cp.y);
+      if (Math.hypot(wp.x - active().x, wp.y - active().y) < AIM_GRAB_R) {
+        aiming = true; panLast = null; updateAim(wp);
+        return;
+      }
+    }
+    panLast = cp;
   }
   function onCanvasMove(e) {
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, canvasPoint(e));
+    if (aiming && pointers.size === 1) {
+      updateAim(toWorld(pointers.get(e.pointerId).x, pointers.get(e.pointerId).y));
+      return;
+    }
     if (pointers.size >= 2 && pinchStart) {
       const m = pinchMid();
       S.zoom = Math.max(1, Math.min(3.5, pinchStart.zoom * (pinchDist() / pinchStart.dist)));
@@ -710,6 +1120,7 @@ export function mount(container) {
   function onCanvasUp(e) {
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinchStart = null;
+    if (pointers.size === 0) aiming = false;
     panLast = pointers.size === 1 ? [...pointers.values()][0] : null;
   }
 
@@ -779,4 +1190,12 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+function line(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+function lightenHex(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((n >> 16) & 255) + amt);
+  const g = Math.min(255, ((n >> 8) & 255) + amt);
+  const b = Math.min(255, (n & 255) + amt);
+  return `rgb(${r},${g},${b})`;
 }

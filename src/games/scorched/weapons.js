@@ -21,6 +21,10 @@ export const SPECIALS = [
   { id: 'digger',  name: '굴착탄',     icon: '🕳', radius: 92,  damage: 12, desc: '지형을 크게 파내 추락 유도' },
   { id: 'penta',   name: '오연포',     icon: '✋', radius: 24,  damage: 20, desc: '한 번에 5발 부채꼴 발사', volley: 5 },
   { id: 'storm',   name: '폭풍탄',     icon: '🌪', radius: 18,  damage: 13, desc: '공중에서 7발로 광범위 분열', split: 7 },
+  { id: 'homing',  name: '유도탄',     icon: '🛰', radius: 30,  damage: 30, desc: '정점 이후 상대 탱크를 추적', homing: true },
+  { id: 'fire',    name: '화염지대',   icon: '🌋', radius: 26,  damage: 16, desc: '착탄 지점이 3턴간 불타 지속 피해', fire: true },
+  { id: 'gas',     name: '독가스탄',   icon: '☠️', radius: 40,  damage: 0,  desc: '독가스 구름이 4턴간 머물며 지속 피해', gas: true },
+  { id: 'rail',    name: '레일건',     icon: '⚡', radius: 18,  damage: 52, desc: '중력 무시 초고속 직사 저격(언덕은 못 넘음)', rail: true },
 ];
 
 // 특수탄 3종을 뽑아 각 2~3발 지급(핵탄은 1발).
