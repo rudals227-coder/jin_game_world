@@ -42,7 +42,7 @@ export function mount(container) {
       w, h, cx: w / 2, cy: h / 2,
       goalW: Math.min(w * 0.44, 240),
       rPuck: Math.min(w, h) * 0.028 + 4,
-      rMallet: Math.min(w, h) * 0.05 + 6,
+      rMallet: Math.min(w, h) * 0.062 + 9,
     };
   }
 
@@ -63,7 +63,7 @@ export function mount(container) {
     const g = geom();
     S.puck.x = g.cx; S.puck.y = g.cy;
     S.puck.vx = 0;
-    S.puck.vy = (toward === 'top' ? -1 : 1) * g.h * 0.32; // 득점당한 쪽으로 서브
+    S.puck.vy = (toward === 'top' ? -1 : 1) * g.h * 0.256; // 득점당한 쪽으로 서브
     S.kickoff = 0.7;
   }
 
@@ -120,7 +120,7 @@ export function mount(container) {
     const vdot = b.vx * nx + b.vy * ny;
     if (vdot < 0) { b.vx -= 2 * vdot * nx; b.vy -= 2 * vdot * ny; } // 반사
     b.vx += m.vx * 0.65; b.vy += m.vy * 0.65; // 말렛 속도 전달
-    const sp = Math.hypot(b.vx, b.vy), minSp = g.h * 0.5;
+    const sp = Math.hypot(b.vx, b.vy), minSp = g.h * 0.4;
     if (sp < minSp) { b.vx = nx * minSp; b.vy = ny * minSp; }
     sfx.paddle();
   }
@@ -143,7 +143,7 @@ export function mount(container) {
       collideMallet(S.mBottom, g);
     }
     b.vx *= (1 - 0.14 * dt); b.vy *= (1 - 0.14 * dt); // 약한 마찰
-    const sp = Math.hypot(b.vx, b.vy), max = g.h * 1.7;
+    const sp = Math.hypot(b.vx, b.vy), max = g.h * 1.36;
     if (sp > max) { b.vx *= max / sp; b.vy *= max / sp; }
     if (Math.hypot(b.vx, b.vy) < 3) { b.vx = 0; b.vy = 0; }
   }
@@ -204,14 +204,20 @@ export function mount(container) {
     drawScore(ctx, g, 'top');
     drawScore(ctx, g, 'bottom');
 
-    // 퍽
+    // 퍽 (밝은 형광 노랑 — 어두운 링크에서 잘 보이게)
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = g.rPuck * 0.6; ctx.shadowOffsetY = 3;
+    ctx.shadowColor = 'rgba(255,214,80,0.85)'; ctx.shadowBlur = g.rPuck * 1.1; ctx.shadowOffsetY = 2;
+    const pg = ctx.createRadialGradient(
+      S.puck.x - g.rPuck * 0.3, S.puck.y - g.rPuck * 0.3, g.rPuck * 0.2,
+      S.puck.x, S.puck.y, g.rPuck);
+    pg.addColorStop(0, '#fffde0');
+    pg.addColorStop(0.5, '#ffe14d');
+    pg.addColorStop(1, '#ffb020');
     ctx.beginPath(); ctx.arc(S.puck.x, S.puck.y, g.rPuck, 0, Math.PI * 2);
-    ctx.fillStyle = '#1b2430'; ctx.fill();
+    ctx.fillStyle = pg; ctx.fill();
     ctx.restore();
-    ctx.beginPath(); ctx.arc(S.puck.x - g.rPuck * 0.3, S.puck.y - g.rPuck * 0.3, g.rPuck * 0.35, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(S.puck.x - g.rPuck * 0.32, S.puck.y - g.rPuck * 0.32, g.rPuck * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
 
     // 말렛
     drawMallet(ctx, S.mTop, g.rMallet, TOP);
