@@ -279,7 +279,7 @@ export function mount(container) {
 
   function makeShot(x, y, vx, vy, w) {
     return {
-      x, y, vx, vy, w,
+      x, y, ox: x, oy: y, vx, vy, w, // ox,oy = 발사 원점(레일건 레이저 줄기용)
       t: 0, armed: false, trail: [],
       split: false, rolling: false, rollDist: 0, rollDir: 1, bounces: 0, dived: false,
     };
@@ -396,6 +396,8 @@ export function mount(container) {
     s.dead = true;
     const w = s.w;
     const r = w.radius;
+    // 레일건: 포구→착탄점 레이저 잔상(짧게 남았다 사라짐)
+    if (w.rail) S.particles.push({ beam: true, x1: s.ox, y1: s.oy, x2: x, y2: y, life: 0.4, max: 0.4 });
     if (w.scatter) {
       // 네이팜: 착탄 지점 좌우로 여러 발 연속 폭발(지면 기준 카펫)
       const n = w.scatter;
@@ -571,7 +573,7 @@ export function mount(container) {
   function stepParticles(dt) {
     for (const p of S.particles) {
       p.life -= dt;
-      if (p.ring) continue;
+      if (p.ring || p.beam) continue;
       p.vy += 220 * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -836,28 +838,69 @@ export function mount(container) {
   }
 
   function drawShot(ctx, s) {
-    // 트레일
+    const w = s.w;
+    // 레일건: 포구→현재 위치로 뻗는 레이저 빔
+    if (w.rail) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(120,220,255,0.95)'; ctx.shadowBlur = 18;
+      ctx.strokeStyle = 'rgba(150,230,255,0.9)'; ctx.lineWidth = 6;
+      line(ctx, s.ox, s.oy, s.x, s.y);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.2;
+      line(ctx, s.ox, s.oy, s.x, s.y);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#e6f9ff'; ctx.shadowBlur = 20; ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    const kind = shotKind(w);
+    // 트레일(종류별 색)
+    const tc = kind === 'fire' ? '255,150,60'
+      : kind === 'gas' ? '150,220,140'
+        : kind === 'missile' ? '220,220,230'
+          : '255,190,90';
     for (let i = 0; i < s.trail.length; i++) {
       const pt = s.trail[i];
       const a = i / s.trail.length;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, 1 + a * 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,190,90,${a * 0.6})`;
+      ctx.fillStyle = `rgba(${tc},${a * 0.6})`;
       ctx.fill();
     }
-    // 포탄
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffe08a';
-    ctx.shadowColor = 'rgba(255,200,90,0.9)';
-    ctx.shadowBlur = 10;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+
+    const ang = Math.atan2(s.vy, s.vx);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 3;
+    switch (kind) {
+      case 'fire': drawFireball(ctx); break;
+      case 'gas': ctx.rotate(ang); drawCanister(ctx); break;
+      case 'missile': ctx.rotate(ang); drawMissile(ctx); break;
+      case 'dart': ctx.rotate(ang); drawDart(ctx); break;
+      case 'bomb': drawBomb(ctx, w); break;
+      case 'dirt': drawDirtball(ctx); break;
+      case 'cluster': drawCluster(ctx); break;
+      case 'ball': drawBall(ctx, w); break;
+      default: ctx.rotate(ang); drawShell(ctx); break;
+    }
+    ctx.restore();
   }
 
   function drawParticles(ctx) {
     for (const p of S.particles) {
       const a = Math.max(0, p.life / p.max);
+      if (p.beam) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.shadowColor = 'rgba(120,220,255,0.9)'; ctx.shadowBlur = 16;
+        ctx.strokeStyle = `rgba(150,230,255,${a})`; ctx.lineWidth = 7;
+        line(ctx, p.x1, p.y1, p.x2, p.y2);
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 2.5;
+        line(ctx, p.x1, p.y1, p.x2, p.y2);
+        ctx.restore();
+        continue;
+      }
       if (p.ring) {
         const rad = p.rr * (1 - a) + p.r;
         ctx.beginPath();
@@ -1000,9 +1043,8 @@ export function mount(container) {
       weaponRow.append(b);
     }
 
-    // 이동 버튼(턴당 제한). 누르는 동안 이동.
-    const moveRow = el('div', 'sc-weapons');
-    moveRow.style.justifyContent = 'center';
+    // 이동 버튼(턴당 제한). 누르는 동안 이동. — 발사 버튼과 떨어뜨려 오터치 방지(왼쪽 배치).
+    const moveRow = el('div', 'sc-move');
     const mkMove = (label, dir) => {
       const b = el('button', 'sc-weapon');
       b.innerHTML = `<span class="wi">${label}</span><span class="wn">이동</span>`;
@@ -1016,14 +1058,18 @@ export function mount(container) {
     };
     moveRow.append(mkMove('◀', -1), mkMove('▶', 1));
 
-    // 발사 버튼
+    // 발사 버튼 (오른쪽, 크게)
     const fireBtn = el('button', 'sc-fire primary');
     fireBtn.textContent = '🔥 발사';
     fireBtn.disabled = disabled;
     fireBtn.addEventListener('click', fire);
 
+    // 하단 행: [◀ ▶ 이동]  ···큰 간격···  [🔥 발사]
+    const bottomRow = el('div', 'sc-bottom');
+    bottomRow.append(moveRow, fireBtn);
+
     controls.style.setProperty('--pc', p.color);
-    controls.append(sliders, weaponRow, moveRow, fireBtn);
+    controls.append(sliders, weaponRow, bottomRow);
     if (disabled) controls.classList.add('locked'); else controls.classList.remove('locked');
   }
 
@@ -1034,9 +1080,39 @@ export function mount(container) {
     input.type = 'range'; input.min = min; input.max = max; input.value = value;
     input.className = 'sc-range';
     const val = el('span', 'sc-val'); val.textContent = label === '각도' ? value + '°' : value;
-    input.addEventListener('input', () => onInput(parseInt(input.value, 10)));
-    row.append(lab, input, val);
+    const set = (v) => {
+      v = Math.max(min, Math.min(max, Math.round(v)));
+      input.value = v;
+      onInput(v);
+    };
+    input.addEventListener('input', () => set(parseInt(input.value, 10)));
+    // −/＋ 미세 조절(누르고 있으면 가속 반복)
+    const minus = stepBtn('−', () => set(parseInt(input.value, 10) - 1));
+    const plus = stepBtn('＋', () => set(parseInt(input.value, 10) + 1));
+    row.append(lab, minus, input, plus, val);
     return { row, input, val };
+  }
+
+  // 스텝 버튼: 탭 1회 = ±1, 길게 누르면 점점 빨라지며 반복
+  function stepBtn(label, act) {
+    const b = el('button', 'sc-step');
+    b.textContent = label;
+    let timer = null;
+    const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const start = (e) => {
+      e.preventDefault();
+      if (S.mode !== 'aim') return;
+      act();
+      let delay = 340;
+      const tick = () => { act(); delay = Math.max(28, delay * 0.78); timer = setTimeout(tick, delay); };
+      timer = setTimeout(tick, 340);
+      b.setPointerCapture?.(e.pointerId);
+    };
+    b.addEventListener('pointerdown', start);
+    b.addEventListener('pointerup', stop);
+    b.addEventListener('pointercancel', stop);
+    b.addEventListener('pointerleave', stop);
+    return b;
   }
 
   // 캔버스: 탱크 근처를 끌면 조준(각도/파워), 그 외엔 핀치 줌 / 드래그 팬.
@@ -1192,6 +1268,88 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 function line(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+
+// ---------- 발사체 모양 (원점 0,0 기준. 방향성 있는 것은 호출부가 velocity로 회전) ----------
+function shotKind(w) {
+  if (w.gas) return 'gas';
+  if (w.fire || w.scatter) return 'fire';   // 화염지대 / 네이팜
+  if (w.homing) return 'missile';           // 유도탄
+  if (w.dive || w.pierce || w.id === 'heavy') return 'dart'; // 급강하/벙커버스터/철갑탄
+  if (w.dirt) return 'dirt';                // 흙폭탄
+  if (w.nuke || w.id === 'big') return 'bomb'; // 핵탄/대형탄
+  if (w.split) return 'cluster';            // 분열/집속/폭풍탄
+  if (w.roll || w.bounce) return 'ball';    // 굴림/튕김탄
+  return 'shell';                           // 기본/삼연포/오연포/굴착탄 등
+}
+function drawShell(ctx) { // 뾰족한 포탄 (+x 방향)
+  ctx.fillStyle = '#d9c06a';
+  roundRect(ctx, -7, -3.2, 11, 6.4, 2); ctx.fill();
+  ctx.fillStyle = '#b8933f';
+  ctx.beginPath(); ctx.moveTo(4, -3.2); ctx.lineTo(9, 0); ctx.lineTo(4, 3.2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(-6, -2.3, 8, 1.4);
+}
+function drawMissile(ctx) { // 유도 미사일 (+x, 화염 꼬리)
+  ctx.fillStyle = 'rgba(255,170,60,0.9)';
+  ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-13 - Math.random() * 5, 0); ctx.lineTo(-6, 2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#9aa3b2';
+  ctx.beginPath(); ctx.moveTo(-7, -2.6); ctx.lineTo(-10, -5.2); ctx.lineTo(-4, -2.6); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-7, 2.6); ctx.lineTo(-10, 5.2); ctx.lineTo(-4, 2.6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#e8ecf2'; roundRect(ctx, -7, -2.6, 12, 5.2, 2.2); ctx.fill();
+  ctx.fillStyle = '#ff5a4d';
+  ctx.beginPath(); ctx.moveTo(5, -2.6); ctx.lineTo(10, 0); ctx.lineTo(5, 2.6); ctx.closePath(); ctx.fill();
+}
+function drawDart(ctx) { // 철갑/관통 다트 (+x, 날카로움)
+  ctx.fillStyle = '#7d848f';
+  ctx.beginPath();
+  ctx.moveTo(10, 0); ctx.lineTo(-2, -3.4); ctx.lineTo(-8, -2.4); ctx.lineTo(-8, 2.4); ctx.lineTo(-2, 3.4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#cdd2da';
+  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(1, -2); ctx.lineTo(1, 2); ctx.closePath(); ctx.fill();
+}
+function drawBomb(ctx, w) { // 둥근 폭탄 (핵탄=☢)
+  const R = w.nuke ? 9 : 7;
+  ctx.fillStyle = w.nuke ? '#3a3f4a' : '#2c313b';
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.arc(-R * 0.35, -R * 0.35, R * 0.32, 0, Math.PI * 2); ctx.fill();
+  if (w.nuke) {
+    ctx.fillStyle = '#ffd34a'; ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('☢', 0, 0.5);
+  }
+}
+function drawDirtball(ctx) { // 흙덩이
+  ctx.fillStyle = '#9a6b3c';
+  ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a4f2a';
+  for (const [dx, dy] of [[-3, -1], [2, 2], [3, -2], [-1, 3]]) { ctx.beginPath(); ctx.arc(dx, dy, 1.6, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawCluster(ctx) { // 집속/분열 폭탄
+  ctx.fillStyle = '#5a6472'; ctx.beginPath(); ctx.arc(0, 0, 6.5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2b3038'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 6.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#ffd34a'; ctx.fillRect(-6.5, -1, 13, 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(-2, -2, 2, 0, Math.PI * 2); ctx.fill();
+}
+function drawBall(ctx, w) { // 굴림/튕김 공
+  ctx.fillStyle = w.bounce ? '#ff8a3d' : '#c9d0da';
+  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.stroke();
+  if (w.bounce) { line(ctx, -6, 0, 6, 0); line(ctx, 0, -6, 0, 6); } // 농구공 무늬
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.arc(-2, -2, 1.8, 0, Math.PI * 2); ctx.fill();
+}
+function drawFireball(ctx) { // 화염구(깜빡임)
+  const f = 0.75 + Math.random() * 0.3;
+  ctx.shadowColor = 'rgba(255,140,40,0.9)'; ctx.shadowBlur = 14;
+  ctx.fillStyle = '#ff7a2a'; ctx.beginPath(); ctx.arc(0, 0, 6 * f, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.arc(0, 0, 3.4 * f, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff3c0'; ctx.beginPath(); ctx.arc(-1, -1, 1.4, 0, Math.PI * 2); ctx.fill();
+}
+function drawCanister(ctx) { // 독가스 캡슐 (+x)
+  ctx.fillStyle = '#5fbf4f'; roundRect(ctx, -6, -3.5, 12, 7, 2.5); ctx.fill();
+  ctx.fillStyle = '#2f7f2a'; ctx.fillRect(-6, -3.5, 3, 7);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-3.5, -2.6, 7, 1.4);
+  ctx.fillStyle = 'rgba(150,220,140,0.55)'; ctx.beginPath(); ctx.arc(7, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+}
 function lightenHex(hex, amt) {
   const n = parseInt(hex.slice(1), 16);
   const r = Math.min(255, ((n >> 16) & 255) + amt);

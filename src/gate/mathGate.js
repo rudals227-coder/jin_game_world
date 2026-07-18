@@ -1,6 +1,7 @@
 // 덧셈 관문 — 게임 허브에 들어가기 전 덧셈 5문제를 풀어야 통과.
-//   문제 유형(랜덤): 한자리+한자리 / 두자리+한자리 / 두자리+두자리
+//   문제 유형(랜덤): 한자리+한자리 / 두자리+한자리 / 두자리+두자리 / 두자리+한자리+한자리
 //   하나 맞히면 다음 문제, 5개 다 맞히면 폭죽 → onPass() 호출로 허브 진입.
+//   필기 노트: 손가락/펜슬로 숫자를 써서 계산 연습(펜·지우개·전체지우기).
 // 계약: mountGate(container, onPass) → unmount()  (라우터가 정리 시 호출)
 import { sfx, resumeAudio } from '../engine/audio.js';
 
@@ -26,13 +27,11 @@ export function mountGate(container, onPass) {
   const dotEls = [];
   for (let i = 0; i < N; i++) { const d = el('span', 'dot'); dots.appendChild(d); dotEls.push(d); }
   const count = el('div', 'mgate-count');
-  const q = el('div', 'mgate-q');
-  const qa = el('b', 'na'), qb = el('b', 'nb'), plus = el('span', 'op'), eq = el('span', 'op');
-  plus.textContent = '+'; eq.textContent = '=';
+  const q = el('div', 'mgate-q');       // 문제식 (항이 가변이라 refresh에서 다시 그림)
   const ansBox = el('span', 'mgate-ans');
-  q.append(qa, plus, qb, eq, ansBox);
+  const note = buildNote();             // 필기 노트
   const pad = buildPad(onKey);
-  card.append(title, dots, count, q, pad);
+  card.append(title, dots, count, q, note.wrap, pad);
   root.appendChild(card);
 
   window.addEventListener('keydown', onKeyDown);
@@ -41,12 +40,19 @@ export function mountGate(container, onPass) {
   // ----- 문제 표시 갱신 -----
   function refresh() {
     const p = problems[idx];
-    qa.textContent = p.a; qb.textContent = p.b;
+    q.innerHTML = '';
+    p.terms.forEach((n, i) => {
+      if (i > 0) { const op = el('span', 'op'); op.textContent = '+'; q.appendChild(op); }
+      const b = el('b'); b.textContent = n; q.appendChild(b);
+    });
+    const eq = el('span', 'op'); eq.textContent = '='; q.appendChild(eq);
+    q.appendChild(ansBox);
     count.textContent = `${idx + 1} / ${N}`;
     dotEls.forEach((d, i) => {
       d.className = 'dot' + (i < idx ? ' on' : i === idx ? ' cur' : '');
     });
     setTyped('');
+    note.clear(); // 새 문제 → 노트 비우기
   }
   function setTyped(v) { typed = v; ansBox.textContent = typed === '' ? '?' : typed; }
 
@@ -56,7 +62,7 @@ export function mountGate(container, onPass) {
     resumeAudio();
     if (k === 'back') { if (typed) setTyped(typed.slice(0, -1)); return; }
     if (k === 'ok') { submit(); return; }
-    if (typed.length >= 3) return;            // 최대 3자리
+    if (typed.length >= 4) return;            // 최대 4자리(세 항 합도 커버)
     if (typed === '' && k === '0') return;    // 선행 0 방지
     setTyped(typed + k);
   }
@@ -91,6 +97,7 @@ export function mountGate(container, onPass) {
   // ----- 성공: 폭죽 → 허브 -----
   function success() {
     finished = true;
+    note.destroy();
     root.classList.add('win');
     root.innerHTML = '';
     const fw = el('canvas', 'mgate-fw');
@@ -110,14 +117,11 @@ export function mountGate(container, onPass) {
     const ctx = canvas.getContext('2d');
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let W = 0, H = 0;
-    function size() {
-      const r = root.getBoundingClientRect();
-      W = r.width; H = r.height;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    size();
+    const r = root.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const parts = [];
     const colors = ['#ff5a5a', '#ffd84d', '#4dd2e6', '#4f8cff', '#b06cf0', '#5ee08a', '#ff8ad6'];
     let seed = 1;
@@ -131,12 +135,10 @@ export function mountGate(container, onPass) {
         parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c, r: 2 + rand() * 2 });
       }
     }
-    let t = 0, last = 0;
+    let last = 0;
     function frame(ts) {
       if (!last) last = ts;
       const dt = Math.min(0.033, (ts - last) / 1000); last = ts;
-      t += dt;
-      // 주기적으로 새 폭죽 (화면 상단 절반 랜덤 위치)
       if (parts.length < 500 && rand() < dt * 6) burst(W * (0.15 + rand() * 0.7), H * (0.15 + rand() * 0.4));
       ctx.clearRect(0, 0, W, H);
       for (let i = parts.length - 1; i >= 0; i--) {
@@ -153,7 +155,6 @@ export function mountGate(container, onPass) {
       ctx.globalAlpha = 1;
       raf = requestAnimationFrame(frame);
     }
-    // 시작 즉시 몇 발
     for (let i = 0; i < 4; i++) burst(W * (0.2 + rand() * 0.6), H * (0.2 + rand() * 0.3));
     raf = requestAnimationFrame(frame);
   }
@@ -162,9 +163,109 @@ export function mountGate(container, onPass) {
     if (raf) cancelAnimationFrame(raf);
     timers.forEach(clearTimeout);
     window.removeEventListener('keydown', onKeyDown);
+    note.destroy();
     root.remove();
   };
 }
+
+// ---------- 필기 노트 (펜/지우개/전체지우기) ----------
+function buildNote() {
+  const wrap = el('div', 'mgate-note');
+  const tools = el('div', 'note-tools');
+  const lab = el('span', 'note-lab'); lab.textContent = '✏️ 계산 노트';
+  const penBtn = toolBtn('펜', 'pen active');
+  const eraBtn = toolBtn('지우개', 'era');
+  const clrBtn = toolBtn('전체 지우기', 'clr');
+  tools.append(lab, spacerEl(), penBtn, eraBtn, clrBtn);
+  const canvas = el('canvas', 'note-canvas');
+  wrap.append(tools, canvas);
+
+  const ctx = canvas.getContext('2d');
+  let dpr = 1, W = 0, H = 0, eraser = false, drawing = false, lastX = 0, lastY = 0, pid = null;
+
+  function fit() {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  }
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function apply() {
+    if (eraser) { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 26; }
+    else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#20252e'; ctx.lineWidth = 3.2; }
+  }
+  function dot(x, y) {
+    apply();
+    ctx.beginPath();
+    ctx.arc(x, y, (eraser ? 13 : 1.7), 0, Math.PI * 2);
+    if (eraser) { ctx.fill(); } // destination-out fill = 지움
+    else { ctx.fillStyle = '#20252e'; ctx.fill(); }
+  }
+  function seg(x1, y1, x2, y2) {
+    apply();
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  function down(e) {
+    e.preventDefault();
+    if (!W) fit();
+    drawing = true; pid = e.pointerId;
+    canvas.setPointerCapture?.(e.pointerId);
+    const p = pos(e); lastX = p.x; lastY = p.y; dot(p.x, p.y);
+  }
+  function move(e) {
+    if (!drawing || e.pointerId !== pid) return;
+    e.preventDefault();
+    const p = pos(e); seg(lastX, lastY, p.x, p.y); lastX = p.x; lastY = p.y;
+  }
+  function up(e) {
+    if (e.pointerId !== pid) return;
+    drawing = false; pid = null;
+  }
+  canvas.addEventListener('pointerdown', down);
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+
+  penBtn.addEventListener('click', () => { eraser = false; penBtn.classList.add('active'); eraBtn.classList.remove('active'); });
+  eraBtn.addEventListener('click', () => { eraser = true; eraBtn.classList.add('active'); penBtn.classList.remove('active'); });
+  clrBtn.addEventListener('click', () => clear());
+
+  function clear() {
+    if (!W) { fit(); if (!W) return; }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore();
+  }
+  const onResize = () => { const prev = W; fit(); if (prev) clear(); };
+  window.addEventListener('resize', onResize);
+  // 레이아웃 완료 후 최초 fit
+  requestAnimationFrame(fit);
+
+  return {
+    wrap,
+    clear,
+    destroy() {
+      window.removeEventListener('resize', onResize);
+      canvas.removeEventListener('pointerdown', down);
+      canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerup', up);
+      canvas.removeEventListener('pointercancel', up);
+    },
+  };
+}
+
+function toolBtn(label, cls) {
+  const b = document.createElement('button');
+  b.className = 'note-tool ' + cls;
+  b.textContent = label;
+  return b;
+}
+function spacerEl() { return el('span', 'note-spacer'); }
 
 // 숫자패드 (3x4): 1-9, ⌫, 0, 확인
 function buildPad(onKey) {
@@ -180,18 +281,20 @@ function buildPad(onKey) {
   return pad;
 }
 
-// 문제 5개 생성 — 세 유형에서 랜덤
+// 문제 5개 생성 — 네 유형에서 랜덤
 function makeProblems(n) {
-  const types = ['s', 'm', 'l']; // s: 1+1, m: 2+1, l: 2+2
+  // s: 1+1 / m: 2+1 / l: 2+2 / t: 2+1+1(세 항)
+  const types = ['s', 'm', 'l', 't'];
   const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
   const out = [];
   for (let i = 0; i < n; i++) {
     const t = types[Math.floor(Math.random() * types.length)];
-    let a, b;
-    if (t === 's') { a = rnd(1, 9); b = rnd(1, 9); }
-    else if (t === 'm') { a = rnd(10, 99); b = rnd(1, 9); }
-    else { a = rnd(10, 99); b = rnd(10, 99); }
-    out.push({ a, b, ans: a + b });
+    let terms;
+    if (t === 's') terms = [rnd(1, 9), rnd(1, 9)];
+    else if (t === 'm') terms = [rnd(10, 99), rnd(1, 9)];
+    else if (t === 'l') terms = [rnd(10, 99), rnd(10, 99)];
+    else terms = [rnd(10, 99), rnd(1, 9), rnd(1, 9)];
+    out.push({ terms, ans: terms.reduce((a, b) => a + b, 0) });
   }
   return out;
 }
