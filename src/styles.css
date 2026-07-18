@@ -541,3 +541,144 @@ button.toggle.active {
 .lander-controls .ctrl.thrust.active {
   background: rgba(255, 150, 70, 0.95);
 }
+
+/* ---------- 덧셈 관문 (허브 진입 전) ---------- */
+.mgate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.mgate::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60% 50% at 15% 0%, rgba(79, 140, 255, 0.22), transparent 60%),
+    radial-gradient(55% 45% at 100% 10%, rgba(224, 86, 63, 0.18), transparent 60%),
+    radial-gradient(70% 60% at 50% 110%, rgba(94, 224, 138, 0.14), transparent 60%),
+    #0a0d13;
+}
+.mgate-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  padding: 24px 22px 26px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+.mgate-card.correct { animation: mgate-pop 0.4s ease; }
+.mgate-card.wrong { animation: mgate-shake 0.4s ease; }
+@keyframes mgate-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); box-shadow: 0 0 0 3px rgba(94, 224, 138, 0.7), 0 24px 60px rgba(0, 0, 0, 0.55); }
+  100% { transform: scale(1); }
+}
+@keyframes mgate-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); }
+  40% { transform: translateX(9px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+.mgate-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+.mgate-dots {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin-bottom: 6px;
+}
+.mgate-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.2s, transform 0.2s;
+}
+.mgate-dots .dot.cur { background: var(--accent); transform: scale(1.25); }
+.mgate-dots .dot.on { background: #5ee08a; }
+.mgate-count {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+.mgate-q {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 40px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 20px;
+  min-height: 54px;
+}
+.mgate-q .op { color: var(--muted); font-weight: 700; }
+.mgate-ans {
+  min-width: 74px;
+  padding: 2px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 2px solid var(--accent);
+  color: #ffd84d;
+}
+.mgate-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.mkey {
+  font-size: 24px;
+  font-weight: 700;
+  padding: 16px 0;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: manipulation;
+}
+.mkey:active { background: var(--accent-strong); transform: scale(0.96); }
+.mkey.back { background: rgba(255, 120, 90, 0.2); }
+.mkey.ok {
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+}
+/* 성공 폭죽 화면 */
+.mgate.win { background: #06080d; }
+.mgate-fw {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.mgate-win-msg {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  pointer-events: none;
+}
+.mgate-win-msg .big {
+  font-size: 54px;
+  font-weight: 900;
+  color: #ffd84d;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  animation: mgate-pop 0.5s ease;
+}
+.mgate-win-msg .sub {
+  margin-top: 10px;
+  font-size: 16px;
+  color: #e7ebf2;
+}

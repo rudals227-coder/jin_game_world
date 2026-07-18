@@ -1,5 +1,6 @@
 import { mountHub } from './hub/hub.js';
 import { getGame } from './games/registry.js';
+import { mountGate } from './gate/mathGate.js';
 
 // 해시 기반 라우터.
 //   #/            → 허브
@@ -7,6 +8,8 @@ import { getGame } from './games/registry.js';
 // 어떤 화면이든 이탈 시 이전 화면의 unmount 를 호출해 자원을 정리한다.
 export function startRouter(container) {
   let currentUnmount = null;
+  // 덧셈 관문: 이번 방문(새로고침 전까지) 동안 한 번만 통과하면 됨.
+  let gatePassed = false;
 
   async function render() {
     // 이전 화면 정리 (RAF/이벤트/DOM)
@@ -19,6 +22,15 @@ export function startRouter(container) {
       currentUnmount = null;
     }
     container.innerHTML = '';
+
+    // 관문 미통과 시 어떤 경로든 덧셈 문제부터. 통과하면 원래 가려던 화면으로.
+    if (!gatePassed) {
+      currentUnmount = mountGate(container, () => {
+        gatePassed = true;
+        render();
+      });
+      return;
+    }
 
     const route = parseHash(location.hash);
 
