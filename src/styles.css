@@ -593,14 +593,48 @@ button.toggle.active {
 }
 .mgate-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 860px;
   margin: auto;
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 22px;
   padding: 22px 20px 24px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   text-align: center;
+}
+/* 왼쪽: 문제 + 답 + 숫자패드 */
+.mgate-left {
+  flex: 0 0 328px;
+  display: flex;
+  flex-direction: column;
+}
+.mgate-left .mgate-pad { margin-top: auto; } /* 패드를 아래로 */
+/* 오른쪽: 큰 연습장 */
+.mgate-right {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.mgate-right .mgate-note {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.mgate-right .note-canvas {
+  flex: 1;
+  height: auto;
+  min-height: 340px;
+}
+/* 좁은 화면(세로 모드 등): 다시 위아래로 쌓기 */
+@media (max-width: 700px) {
+  .mgate-card { flex-direction: column; max-width: 440px; }
+  .mgate-left { flex: none; }
+  .mgate-left .mgate-pad { margin-top: 0; }
+  .mgate-right .note-canvas { min-height: 190px; }
 }
 .mgate-card.correct { animation: mgate-pop 0.4s ease; }
 .mgate-card.wrong { animation: mgate-shake 0.4s ease; }

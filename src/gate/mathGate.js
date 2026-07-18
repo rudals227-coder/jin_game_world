@@ -29,9 +29,14 @@ export function mountGate(container, onPass) {
   const count = el('div', 'mgate-count');
   const q = el('div', 'mgate-q');       // 문제식 (항이 가변이라 refresh에서 다시 그림)
   const ansBox = el('span', 'mgate-ans');
-  const note = buildNote();             // 필기 노트
+  const note = buildNote();             // 필기 노트(연습장)
   const pad = buildPad(onKey);
-  card.append(title, dots, count, q, note.wrap, pad);
+  // 좌우 2단: 왼쪽=문제/답/숫자패드, 오른쪽=큰 연습장
+  const left = el('div', 'mgate-left');
+  left.append(title, dots, count, q, pad);
+  const right = el('div', 'mgate-right');
+  right.append(note.wrap);
+  card.append(left, right);
   root.appendChild(card);
 
   window.addEventListener('keydown', onKeyDown);
@@ -172,7 +177,7 @@ export function mountGate(container, onPass) {
 function buildNote() {
   const wrap = el('div', 'mgate-note');
   const tools = el('div', 'note-tools');
-  const lab = el('span', 'note-lab'); lab.textContent = '✏️ 계산 노트';
+  const lab = el('span', 'note-lab'); lab.textContent = '✏️ 연습장';
   const penBtn = toolBtn('펜', 'pen active');
   const eraBtn = toolBtn('지우개', 'era');
   const clrBtn = toolBtn('전체 지우기', 'clr');
