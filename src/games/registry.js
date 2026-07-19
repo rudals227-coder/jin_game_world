@@ -98,16 +98,17 @@ export const games = [
     cover: airhockeyCover,
     load: () => import('./airhockey/index.js'),
   },
-  {
-    id: 'battle',
-    title: '배틀 아레나',
-    desc: '캐릭터를 골라 실시간 1:1 대결.',
-    tagline: '한 아이패드를 마주보고 두 명이 실시간 대결! 전사·궁수·닌자·마법사 중 골라 조이스틱으로 움직이고 공격해 3판 2선승.',
-    tags: ['2인 대전', '실시간 액션', '터치'],
-    accent: '#e0563f',
-    cover: battleCover,
-    load: () => import('./battle/index.js'),
-  },
+  // [비활성화] 배틀 아레나 — 나중에 다시 켜려면 이 블록 주석을 해제.
+  // {
+  //   id: 'battle',
+  //   title: '배틀 아레나',
+  //   desc: '캐릭터를 골라 실시간 1:1 대결.',
+  //   tagline: '한 아이패드를 마주보고 두 명이 실시간 대결! 전사·궁수·닌자·마법사 중 골라 조이스틱으로 움직이고 공격해 3판 2선승.',
+  //   tags: ['2인 대전', '실시간 액션', '터치'],
+  //   accent: '#e0563f',
+  //   cover: battleCover,
+  //   load: () => import('./battle/index.js'),
+  // },
 ];
 
 export function getGame(id) {
