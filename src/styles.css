@@ -790,3 +790,95 @@ button.toggle.active {
   font-size: 16px;
   color: #e7ebf2;
 }
+
+/* ---------- 배틀 아레나 (설정/결과 오버레이) ---------- */
+.battle-screen .game-stage { background: #f4ecd8; }
+.battle-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(244, 236, 216, 0.9);
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', sans-serif;
+  color: #3a3226;
+}
+/* 설정: 위/아래 두 패널(2P는 180° 회전) */
+.battle-overlay.battle-select { justify-content: space-between; }
+.battle-card {
+  background: #fffdf6;
+  border: 3px solid #3a3226;
+  border-radius: 16px;
+  padding: 20px 22px;
+  text-align: center;
+  max-width: 460px;
+  box-shadow: 4px 5px 0 rgba(60, 45, 30, 0.25);
+}
+.battle-card h2 { font-size: 26px; margin-bottom: 8px; }
+.battle-card p { font-size: 16px; color: #6b5a44; margin-bottom: 14px; }
+.battle-card.win { margin: 6px 0; }
+.battle-card.flip { transform: rotate(180deg); }
+.battle-btnrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.battle-big {
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #ffe6b0;
+  border: 2.5px solid #3a3226;
+  color: #3a3226;
+  box-shadow: 2px 3px 0 rgba(60, 45, 30, 0.25);
+}
+.battle-big:active { transform: translate(1px, 2px); box-shadow: 1px 1px 0 rgba(60, 45, 30, 0.25); }
+/* 캐릭터 선택 패널 */
+.battle-panel {
+  flex: 1;
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.battle-panel.flip { transform: rotate(180deg); }
+.battle-panel.ready { opacity: 0.9; }
+.battle-panel-title { font-size: 18px; font-weight: 800; }
+.battle-chars { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.battle-char {
+  font-family: inherit;
+  width: 128px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: #fffdf6;
+  border: 2.5px solid var(--cc, #3a3226);
+  color: #3a3226;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.15;
+}
+.battle-char .ce { font-size: 26px; }
+.battle-char .cn { font-size: 15px; font-weight: 800; }
+.battle-char .cd { font-size: 11px; color: #6b5a44; }
+.battle-char .cs { font-size: 11px; color: #6b5a44; }
+.battle-char.sel { background: var(--cc); color: #fff; box-shadow: 2px 3px 0 rgba(60, 45, 30, 0.3); }
+.battle-char.sel .cd, .battle-char.sel .cs { color: rgba(255, 255, 255, 0.9); }
+.battle-ready {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  padding: 9px 22px;
+  border-radius: 11px;
+  background: #ffe6b0;
+  border: 2.5px solid #3a3226;
+  color: #3a3226;
+}
+.battle-ready:disabled { opacity: 0.45; }
+.battle-ready.on { background: #7ed08a; color: #163a1f; }

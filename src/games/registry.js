@@ -98,6 +98,16 @@ export const games = [
     cover: airhockeyCover,
     load: () => import('./airhockey/index.js'),
   },
+  {
+    id: 'battle',
+    title: '배틀 아레나',
+    desc: '캐릭터를 골라 실시간 1:1 대결.',
+    tagline: '한 아이패드를 마주보고 두 명이 실시간 대결! 전사·궁수·닌자·마법사 중 골라 조이스틱으로 움직이고 공격해 3판 2선승.',
+    tags: ['2인 대전', '실시간 액션', '터치'],
+    accent: '#e0563f',
+    cover: battleCover,
+    load: () => import('./battle/index.js'),
+  },
 ];
 
 export function getGame(id) {
@@ -483,6 +493,44 @@ function airhockeyCover(uid = 'a') {
     <!-- 퍽 -->
     <circle cx="248" cy="132" r="14" fill="#1b2430"/>
     <circle cx="243" cy="127" r="5" fill="#ffffff" fill-opacity="0.25"/>
+  </svg>`;
+}
+
+// 배틀 아레나: 크림색 종이 위 손그림 아레나 + 마주선 캐릭터 2명 + 물결 HP.
+function battleCover(uid = 'bt') {
+  const W = 400, H = 240;
+  const wavy = (x, y, w, col) => {
+    let d = `M${x},${y}`;
+    for (let i = 1; i <= 10; i++) d += ` L${(x + (w / 10) * i).toFixed(0)},${(y + (i % 2 ? -3 : 3)).toFixed(0)}`;
+    return `<path d="${d}" stroke="${col}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+  };
+  let rules = '';
+  for (let y = 40; y < H; y += 30) rules += `<line x1="14" y1="${y}" x2="${W - 14}" y2="${y}" stroke="rgba(120,90,60,0.10)" stroke-width="1"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${W}" height="${H}" fill="#f4ecd8"/>
+    ${rules}
+    <rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="8" fill="none" stroke="rgba(80,60,40,0.55)" stroke-width="3"/>
+    <!-- 엄폐물 -->
+    <g stroke="#3a3226" stroke-width="2.4" fill="rgba(150,120,80,0.4)">
+      <rect x="182" y="104" width="46" height="20" rx="2"/>
+      <rect x="120" y="150" width="20" height="40" rx="2"/>
+      <rect x="262" y="52" width="20" height="40" rx="2"/>
+    </g>
+    <!-- 1P 전사(하단) -->
+    <g transform="translate(96,168)">
+      <ellipse cx="0" cy="22" rx="20" ry="8" fill="rgba(60,45,30,0.18)"/>
+      <circle cx="0" cy="0" r="24" fill="#fbf6ea" stroke="#e0563f" stroke-width="4"/>
+      <text x="0" y="9" text-anchor="middle" font-size="26">🛡️</text>
+    </g>
+    ${wavy(66, 132, 60, '#e0563f')}
+    <!-- 2P 궁수(상단) -->
+    <g transform="translate(310,74)">
+      <ellipse cx="0" cy="22" rx="20" ry="8" fill="rgba(60,45,30,0.18)"/>
+      <circle cx="0" cy="0" r="24" fill="#fbf6ea" stroke="#2f9e5e" stroke-width="4"/>
+      <text x="0" y="9" text-anchor="middle" font-size="26">🏹</text>
+    </g>
+    ${wavy(280, 110, 60, '#2f9e5e')}
+    <text x="200" y="128" text-anchor="middle" font-size="26" font-weight="900" fill="rgba(80,60,40,0.6)" font-family="'Comic Sans MS',sans-serif">VS</text>
   </svg>`;
 }
 
