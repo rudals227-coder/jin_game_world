@@ -98,6 +98,7 @@ export function mount(container) {
     barrels: [], // 폭발 드럼통
     crateMsg: null, // 획득 안내 { text, t }
     zones: [],   // 지속 지대(화염/독가스) [{x,y,r,kind,turns,dmg}]
+    streamQueue: [], // 연속 발사(삼연포) 대기열 [{t,x,y,vx,vy,w}]
   };
 
   function makePlayer(i, x) {
@@ -112,6 +113,7 @@ export function mount(container) {
       vy: 0, // 낙하용
       moveLeft: MOVE_BUDGET, // 이번 턴 남은 이동 거리
       shield: false, // 다음 피해 1회 흡수
+      frozen: 0, // >0 이면 다음 자기 턴 이동 불가(빙결탄)
     };
   }
 
@@ -128,6 +130,7 @@ export function mount(container) {
     S.moving = 0;
     S.crateMsg = null;
     S.zones = [];
+    S.streamQueue = [];
     spawnObjects();
     rollWind();
     rollBackground();
@@ -260,13 +263,21 @@ export function mount(container) {
     if (w.ammo <= 0) return;
     const a = (p.angle * Math.PI) / 180;
     const v = (p.power / 100) * MAX_V * (w.rail ? 1.7 : 1); // 레일건은 초고속
-    const count = w.volley || 1; // 삼연포 등: 한 번에 여러 발 부채꼴
+    const count = w.volley || 1; // (구) 부채꼴 동시발사
     S.shots = [];
+    S.streamQueue = [];
     for (let k = 0; k < count; k++) {
       const aa = a + (k - (count - 1) / 2) * (6 * Math.PI / 180); // 6° 간격
       const bx = p.x + Math.cos(aa) * (TANK_R + 6);
       const by = p.y - TANK_H / 2 - 4 - Math.sin(aa) * (TANK_R + 6);
       S.shots.push(makeShot(bx, by, Math.cos(aa) * v, -Math.sin(aa) * v, w));
+    }
+    // 연속 발사(삼연포): 같은 각도·파워로 시간차를 두고 뒤이어 발사
+    if (w.stream && w.stream > 1) {
+      const bx = p.x + Math.cos(a) * (TANK_R + 6);
+      const by = p.y - TANK_H / 2 - 4 - Math.sin(a) * (TANK_R + 6);
+      for (let k = 1; k < w.stream; k++)
+        S.streamQueue.push({ t: k * 0.22, x: bx, y: by, vx: Math.cos(a) * v, vy: -Math.sin(a) * v, w });
     }
     if (w.ammo !== Infinity) w.ammo -= 1;
     if (w.ammo <= 0) p.weapon = 'basic';
@@ -289,6 +300,7 @@ export function mount(container) {
   function stepShots(dt) {
     for (const s of S.shots) {
       if (s.rolling) { stepRoll(s, dt); continue; }
+      if (s.scratching) { stepScratch(s, dt); continue; }
       s.t += dt;
       if (s.t > 0.08) s.armed = true;
       // 분열탄/집속탄: 정점(하강 시작)에서 여러 발로 분열
@@ -343,9 +355,10 @@ export function mount(container) {
       if (!s.armed) continue;
       // 탱크 직격
       const hitTank = tankHitBy(s.x, s.y);
-      if (hitTank) { impact(s, s.x, s.y); continue; }
+      if (hitTank) { if (s.w.scratch) startScratch(s); else impact(s, s.x, s.y); continue; }
       // 지형 충돌
       if (isSolid(S.terrain, s.x, s.y)) {
+        if (s.w.scratch) { startScratch(s); continue; } // 스크래치탄: 착탄 후 배회
         if (s.w.bounce && s.bounces < s.w.bounce) { // 튕김탄: 지면에서 튕겨오름
           s.bounces += 1;
           s.y = surfaceY(S.terrain, s.x) - 3;
@@ -380,6 +393,37 @@ export function mount(container) {
     if (uphill || near || s.rollDist > ROLL_MAX || nx < 4 || nx > WORLD_W - 4) {
       impact(s, s.x, s.y);
     }
+  }
+
+  // 스크래치탄: 착탄점 주변(탱크 2배 폭)을 지면 따라 배회하며 여러 번 작은 피해
+  const SCRATCH_R = TANK_W;     // 배회 반경(≈탱크 폭의 2배 지름)
+  const SCRATCH_TIME = 1.6;     // 지속 시간
+  function startScratch(s) {
+    s.scratching = true;
+    s.scx = Math.max(SCRATCH_R + 4, Math.min(WORLD_W - SCRATCH_R - 4, s.x));
+    s.scT = SCRATCH_TIME;
+    s.scTick = 0;
+    s.scDir = Math.random() < 0.5 ? 1 : -1;
+    s.y = surfaceY(S.terrain, s.x) - 3;
+    s.trail.length = 0;
+  }
+  function stepScratch(s, dt) {
+    s.scT -= dt;
+    if (Math.random() < dt * 3) s.scDir *= -1;      // 가끔 방향 전환
+    s.x += s.scDir * 150 * dt;
+    if (s.x < s.scx - SCRATCH_R) { s.x = s.scx - SCRATCH_R; s.scDir = 1; }
+    if (s.x > s.scx + SCRATCH_R) { s.x = s.scx + SCRATCH_R; s.scDir = -1; }
+    s.y = surfaceY(S.terrain, s.x) - 3;
+    s.scTick -= dt;
+    if (s.scTick <= 0) {                            // 주기적으로 긁는 피해
+      s.scTick = 0.16;
+      carveCircle(S.terrain, s.x, s.y, 10);
+      applyDamage(s.x, s.y, 20, s.w.damage);
+      blastObjects(s.x, s.y, 12);
+      spawnBurst(s.x, s.y, 12, '#ffd24a');
+      sfx.explosion(0.18);
+    }
+    if (s.scT <= 0) { s.dead = true; }
   }
 
   // 탱크 피격 판정 — 맞은 탱크 반환(없으면 null)
@@ -426,6 +470,33 @@ export function mount(container) {
       spawnBurst(x, gy, w.radius, w.gas ? '#8fe08f' : '#ff8a3d');
       boom(0.45);
       S.shake = Math.min(18, w.radius * 0.4);
+      return;
+    }
+    if (w.magnet) {
+      // 착탄점으로 상대를 수평으로 끌어당김(y는 그대로 → settle에서 낭떠러지면 추락)
+      for (const p of S.players) {
+        if (p.hp <= 0 || p === active()) continue;
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d >= r + TANK_R) continue;
+        const pull = (1 - d / (r + TANK_R)) * 130;
+        const dir = Math.sign(x - p.x) || 1;
+        p.x = Math.max(TANK_R, Math.min(WORLD_W - TANK_R, p.x + dir * pull));
+        if (p.shield) { p.shield = false; spawnBurst(p.x, p.y - 8, 20, '#c9a0ff'); }
+        else if (w.damage > 0) { p.hp = Math.max(0, p.hp - w.damage); if (p.hp <= 0) sfx.lose(); }
+      }
+      for (let i = 0; i < 4; i++) S.particles.push({ ring: true, x, y, r: r * 0.9 - i * 12, rr: 4, life: 0.4, max: 0.4, color: '#c9a0ff' });
+      spawnBurst(x, surfaceY(S.terrain, x), r * 0.5, '#c9a0ff');
+      boom(0.45); S.shake = 12;
+      return;
+    }
+    if (w.freeze) {
+      carveCircle(S.terrain, x, y, w.radius * 0.5);
+      applyDamage(x, y, w.radius, w.damage);
+      blastObjects(x, y, w.radius);
+      for (const p of S.players)
+        if (p.hp > 0 && p !== active() && Math.hypot(p.x - x, p.y - y) < w.radius + TANK_R) p.frozen = 1;
+      spawnBurst(x, y, w.radius, '#9fe3ff');
+      boom(0.5); S.shake = 12;
       return;
     }
     if (w.dirt) {
@@ -492,6 +563,11 @@ export function mount(container) {
     S.turn = 1 - S.turn;
     rollWind();
     active().moveLeft = MOVE_BUDGET; // 새 턴 이동력 충전
+    if (active().frozen > 0) {        // 빙결: 이번 턴 이동 불가
+      active().frozen -= 1;
+      active().moveLeft = 0;
+      S.crateMsg = { text: `${active().name} 빙결! 이동 불가`, t: 2 };
+    }
     S.moving = 0;
     S.mode = 'aim';
     renderControls();
@@ -509,8 +585,17 @@ export function mount(container) {
     if (S.mode === 'aim' && S.moving) moveActive(S.moving, dt);
 
     if (S.mode === 'flight') {
+      // 연속 발사 대기열 처리
+      if (S.streamQueue.length) {
+        for (const q of S.streamQueue) q.t -= dt * SIM_SPEED;
+        while (S.streamQueue.length && S.streamQueue[0].t <= 0) {
+          const q = S.streamQueue.shift();
+          S.shots.push(makeShot(q.x, q.y, q.vx, q.vy, q.w));
+          sfx.cannon();
+        }
+      }
       stepShots(dt * SIM_SPEED);
-      if (S.shots.length === 0) {
+      if (S.shots.length === 0 && S.streamQueue.length === 0) {
         S.mode = 'settle'; S.settleT = 0.7;
         for (const p of S.players) p._fy0 = p.y; // 낙하 시작 높이 기록
       }
@@ -828,6 +913,18 @@ export function mount(container) {
       ctx.stroke();
       ctx.restore();
     }
+    // 빙결(다음 턴 이동 불가) — 얼음 오라 + 눈송이
+    if (p.frozen > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(180,235,255,0.22)';
+      ctx.beginPath(); ctx.arc(p.x, p.y - TANK_H * 0.35, TANK_R + 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(160,225,255,${0.6 + 0.2 * Math.sin(S.time * 4)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y - TANK_H * 0.35, TANK_R + 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#e8f7ff'; ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('❄', p.x, p.y - TANK_H - 6);
+      ctx.restore();
+    }
 
     // 머리 위 HP 바
     const bw = 52, bh = 6, by = p.y - TANK_H - 20;
@@ -858,8 +955,10 @@ export function mount(container) {
     // 트레일(종류별 색)
     const tc = kind === 'fire' ? '255,150,60'
       : kind === 'gas' ? '150,220,140'
-        : kind === 'missile' ? '220,220,230'
-          : '255,190,90';
+        : kind === 'freeze' ? '150,220,255'
+          : kind === 'magnet' ? '200,160,240'
+            : kind === 'missile' ? '220,220,230'
+              : '255,190,90';
     for (let i = 0; i < s.trail.length; i++) {
       const pt = s.trail[i];
       const a = i / s.trail.length;
@@ -882,6 +981,9 @@ export function mount(container) {
       case 'dirt': drawDirtball(ctx); break;
       case 'cluster': drawCluster(ctx); break;
       case 'ball': drawBall(ctx, w); break;
+      case 'scratch': drawScratchBall(ctx); break;
+      case 'magnet': drawMagnet(ctx); break;
+      case 'freeze': ctx.rotate(ang); drawFreezeShard(ctx); break;
       default: ctx.rotate(ang); drawShell(ctx); break;
     }
     ctx.restore();
@@ -1271,6 +1373,9 @@ function line(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.li
 
 // ---------- 발사체 모양 (원점 0,0 기준. 방향성 있는 것은 호출부가 velocity로 회전) ----------
 function shotKind(w) {
+  if (w.scratch) return 'scratch';          // 스크래치탄
+  if (w.magnet) return 'magnet';            // 자석탄
+  if (w.freeze) return 'freeze';            // 빙결탄
   if (w.gas) return 'gas';
   if (w.fire || w.scatter) return 'fire';   // 화염지대 / 네이팜
   if (w.homing) return 'missile';           // 유도탄
@@ -1349,6 +1454,28 @@ function drawCanister(ctx) { // 독가스 캡슐 (+x)
   ctx.fillStyle = '#2f7f2a'; ctx.fillRect(-6, -3.5, 3, 7);
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-3.5, -2.6, 7, 1.4);
   ctx.fillStyle = 'rgba(150,220,140,0.55)'; ctx.beginPath(); ctx.arc(7, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+}
+function drawScratchBall(ctx) { // 스파크 별(뾰족뾰족)
+  ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#ff8a3d'; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; const r = i % 2 ? 3 : 7.5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+function drawMagnet(ctx) { // U자 자석(빨강 + 은색 극)
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-6, 6); ctx.lineTo(-6, 0);
+  ctx.arc(0, 0, 6, Math.PI, 0, true); // 위쪽 반원
+  ctx.lineTo(6, 6);
+  ctx.strokeStyle = '#d0392b'; ctx.lineWidth = 4.2; ctx.stroke();
+  ctx.strokeStyle = '#dfe6ee'; ctx.lineWidth = 4.2;
+  line(ctx, -6, 4.6, -6, 6.4); line(ctx, 6, 4.6, 6, 6.4);
+}
+function drawFreezeShard(ctx) { // 얼음 결정 (+x)
+  ctx.fillStyle = '#bfeaff'; ctx.strokeStyle = '#5fbfe6'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(0, -5.5); ctx.lineTo(-6, 0); ctx.lineTo(0, 5.5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1; line(ctx, -3, 0, 6, 0);
 }
 function lightenHex(hex, amt) {
   const n = parseInt(hex.slice(1), 16);
