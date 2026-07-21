@@ -262,7 +262,10 @@ export function mount(container) {
     const w = p.inv.find((it) => it.id === p.weapon) || p.inv[0];
     if (w.ammo <= 0) return;
     const a = (p.angle * Math.PI) / 180;
-    const v = (p.power / 100) * MAX_V * (w.rail ? 1.7 : 1); // 레일건은 초고속
+    let v = (p.power / 100) * MAX_V * (w.rail ? 1.7 : 1); // 레일건은 초고속
+    // 레일건은 직사(중력 무시)라 파워가 낮아도 반드시 날아가도록 최소 속도 보장
+    // (v=0이면 제자리에 멈춰 착탄하지 못하고 턴이 넘어가지 않는 버그가 있었음)
+    if (w.rail) v = Math.max(v, MAX_V * 0.9);
     const count = w.volley || 1; // (구) 부채꼴 동시발사
     S.shots = [];
     S.streamQueue = [];
@@ -302,6 +305,7 @@ export function mount(container) {
       if (s.rolling) { stepRoll(s, dt); continue; }
       if (s.scratching) { stepScratch(s, dt); continue; }
       s.t += dt;
+      if (s.t > 12) { s.dead = true; continue; } // 안전장치: 멈춘 포탄 무한 비행 방지
       if (s.t > 0.08) s.armed = true;
       // 분열탄/집속탄: 정점(하강 시작)에서 여러 발로 분열
       if (s.w.split && !s.split && s.vy >= 0) {
@@ -1035,8 +1039,10 @@ export function mount(container) {
     const wSel = p.inv.find((it) => it.id === p.weapon);
     const rail = !!(wSel && wSel.rail);
     const mul = rail ? 1.7 : 1;
-    let vx = Math.cos(a) * (p.power / 100) * MAX_V * mul;
-    let vy = -Math.sin(a) * (p.power / 100) * MAX_V * mul;
+    let speed = (p.power / 100) * MAX_V * mul;
+    if (rail) speed = Math.max(speed, MAX_V * 0.9); // 발사와 동일한 최소 속도
+    let vx = Math.cos(a) * speed;
+    let vy = -Math.sin(a) * speed;
     let x = ox, y = oy;
     ctx.moveTo(x, y);
     for (let i = 0; i < 22; i++) {
