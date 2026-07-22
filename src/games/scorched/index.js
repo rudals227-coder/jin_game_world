@@ -113,7 +113,8 @@ export function mount(container) {
       vy: 0, // 낙하용
       moveLeft: MOVE_BUDGET, // 이번 턴 남은 이동 거리
       shield: false, // 다음 피해 1회 흡수
-      frozen: 0, // >0 이면 다음 자기 턴 이동 불가(빙결탄)
+      frozen: 0, // >0 이면 다음 자기 턴 이동·조준 불가(빙결탄)
+      frozenNow: false, // 이번 턴이 빙결 상태인가
     };
   }
 
@@ -468,8 +469,8 @@ export function mount(container) {
       blastObjects(x, y, w.radius);
       const gy = surfaceY(S.terrain, x);
       S.zones.push({
-        x, y: w.gas ? y : gy, r: w.radius * (w.gas ? 1.5 : 1.35),
-        kind: w.gas ? 'gas' : 'fire', turns: w.gas ? 4 : 3, dmg: w.gas ? 9 : 12,
+        x, y: w.gas ? y : gy, r: w.radius * (w.gas ? 1.6 : 1.45),
+        kind: w.gas ? 'gas' : 'fire', turns: w.gas ? 4 : 3, dmg: w.gas ? 12 : 12,
       });
       spawnBurst(x, gy, w.radius, w.gas ? '#8fe08f' : '#ff8a3d');
       boom(0.45);
@@ -491,6 +492,20 @@ export function mount(container) {
       for (let i = 0; i < 4; i++) S.particles.push({ ring: true, x, y, r: r * 0.9 - i * 12, rr: 4, life: 0.4, max: 0.4, color: '#c9a0ff' });
       spawnBurst(x, surfaceY(S.terrain, x), r * 0.5, '#c9a0ff');
       boom(0.45); S.shake = 12;
+      return;
+    }
+    if (w.teleport) {
+      // 착탄 위치로 내(발사한) 탱크가 순간이동
+      const me = active();
+      let tx = Math.max(TANK_R, Math.min(WORLD_W - TANK_R, x));
+      const foe = enemy();
+      if (foe.hp > 0 && Math.abs(tx - foe.x) < TANK_W) tx += (tx < foe.x ? -1 : 1) * TANK_W; // 상대와 겹침 회피
+      tx = Math.max(TANK_R, Math.min(WORLD_W - TANK_R, tx));
+      spawnBurst(me.x, me.y - TANK_H / 2, 26, '#b98cff');
+      me.x = tx; me.y = restY(me); me.vy = 0;
+      spawnBurst(me.x, me.y - TANK_H / 2, 26, '#b98cff');
+      carveCircle(S.terrain, x, y, r * 0.5);
+      boom(0.4); S.shake = 8;
       return;
     }
     if (w.freeze) {
@@ -566,11 +581,13 @@ export function mount(container) {
     }
     S.turn = 1 - S.turn;
     rollWind();
-    active().moveLeft = MOVE_BUDGET; // 새 턴 이동력 충전
-    if (active().frozen > 0) {        // 빙결: 이번 턴 이동 불가
-      active().frozen -= 1;
-      active().moveLeft = 0;
-      S.crateMsg = { text: `${active().name} 빙결! 이동 불가`, t: 2 };
+    const ap = active();
+    ap.moveLeft = MOVE_BUDGET; // 새 턴 이동력 충전
+    ap.frozenNow = ap.frozen > 0; // 빙결: 이번 턴 이동·조준 불가
+    if (ap.frozenNow) {
+      ap.frozen -= 1;
+      ap.moveLeft = 0;
+      S.crateMsg = { text: `${ap.name} 빙결! 이동·조준 불가`, t: 2 };
     }
     S.moving = 0;
     S.mode = 'aim';
@@ -616,6 +633,15 @@ export function mount(container) {
           else allRest = false;
         } else if (p.y > ry) {
           p.y = ry; // 흙에 묻힌 경우 지면 위로
+        }
+      }
+      // 나락: 발밑이 월드 바닥까지 파여 맨 아래로 떨어지면 즉사
+      for (const p of S.players) {
+        if (p.hp > 0 && p.y >= restY(p) - 0.5 && surfaceY(S.terrain, p.x) >= WORLD_H - 3) {
+          p.hp = 0;
+          spawnBurst(p.x, p.y, 32, '#6b4a2c');
+          S.shake = Math.max(S.shake, 16);
+          sfx.lose();
         }
       }
       S.settleT -= dt;
@@ -961,8 +987,9 @@ export function mount(container) {
       : kind === 'gas' ? '150,220,140'
         : kind === 'freeze' ? '150,220,255'
           : kind === 'magnet' ? '200,160,240'
-            : kind === 'missile' ? '220,220,230'
-              : '255,190,90';
+            : kind === 'teleport' ? '185,140,255'
+              : kind === 'missile' ? '220,220,230'
+                : '255,190,90';
     for (let i = 0; i < s.trail.length; i++) {
       const pt = s.trail[i];
       const a = i / s.trail.length;
@@ -988,6 +1015,7 @@ export function mount(container) {
       case 'scratch': drawScratchBall(ctx); break;
       case 'magnet': drawMagnet(ctx); break;
       case 'freeze': ctx.rotate(ang); drawFreezeShard(ctx); break;
+      case 'teleport': drawTeleport(ctx, S.time); break;
       default: ctx.rotate(ang); drawShell(ctx); break;
     }
     ctx.restore();
@@ -1128,7 +1156,7 @@ export function mount(container) {
 
     // 슬라이더 행
     const sliders = el('div', 'sc-sliders');
-    const angleWrap = sliderRow('각도', 0, 180, p.angle, (v) => { p.angle = v; angleVal.textContent = v + '°'; });
+    const angleWrap = sliderRow('각도', 0, 180, p.angle, (v) => { p.angle = v; angleVal.textContent = v + '°'; }, p.frozenNow);
     const powerWrap = sliderRow('파워', 0, 100, p.power, (v) => { p.power = v; powerVal.textContent = v; });
     angleInput = angleWrap.input; angleVal = angleWrap.val;
     powerInput = powerWrap.input; powerVal = powerWrap.val;
@@ -1181,12 +1209,12 @@ export function mount(container) {
     if (disabled) controls.classList.add('locked'); else controls.classList.remove('locked');
   }
 
-  function sliderRow(label, min, max, value, onInput) {
+  function sliderRow(label, min, max, value, onInput, locked = false) {
     const row = el('div', 'sc-row');
-    const lab = el('span', 'sc-lab'); lab.textContent = label;
+    const lab = el('span', 'sc-lab'); lab.textContent = locked ? label + ' ❄' : label;
     const input = document.createElement('input');
     input.type = 'range'; input.min = min; input.max = max; input.value = value;
-    input.className = 'sc-range';
+    input.className = 'sc-range'; input.disabled = locked;
     const val = el('span', 'sc-val'); val.textContent = label === '각도' ? value + '°' : value;
     const set = (v) => {
       v = Math.max(min, Math.min(max, Math.round(v)));
@@ -1195,8 +1223,8 @@ export function mount(container) {
     };
     input.addEventListener('input', () => set(parseInt(input.value, 10)));
     // −/＋ 미세 조절(누르고 있으면 가속 반복)
-    const minus = stepBtn('−', () => set(parseInt(input.value, 10) - 1));
-    const plus = stepBtn('＋', () => set(parseInt(input.value, 10) + 1));
+    const minus = stepBtn('−', () => set(parseInt(input.value, 10) - 1)); minus.disabled = locked;
+    const plus = stepBtn('＋', () => set(parseInt(input.value, 10) + 1)); plus.disabled = locked;
     row.append(lab, minus, input, plus, val);
     return { row, input, val };
   }
@@ -1209,7 +1237,7 @@ export function mount(container) {
     const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
     const start = (e) => {
       e.preventDefault();
-      if (S.mode !== 'aim') return;
+      if (S.mode !== 'aim' || b.disabled) return;
       act();
       let delay = 340;
       const tick = () => { act(); delay = Math.max(28, delay * 0.78); timer = setTimeout(tick, delay); };
@@ -1237,7 +1265,8 @@ export function mount(container) {
     let deg = Math.round(Math.atan2(-dy, dx) * 180 / Math.PI);
     deg = Math.max(0, Math.min(180, deg));
     const pow = Math.max(5, Math.min(100, Math.round(Math.hypot(dx, dy) / AIM_POWER_SCALE)));
-    p.angle = deg; p.power = pow;
+    if (!p.frozenNow) p.angle = deg; // 빙결 턴에는 포신이 얼어 각도 고정(파워만 조절)
+    p.power = pow;
     syncSliders();
   }
   function canvasPoint(e) {
@@ -1316,8 +1345,8 @@ export function mount(container) {
     }
     const p = active();
     const step = e.shiftKey ? 5 : 1;
-    if (e.key === 'ArrowLeft') { p.angle = Math.min(180, p.angle + step); syncSliders(); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { p.angle = Math.max(0, p.angle - step); syncSliders(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { if (!p.frozenNow) { p.angle = Math.min(180, p.angle + step); syncSliders(); } e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { if (!p.frozenNow) { p.angle = Math.max(0, p.angle - step); syncSliders(); } e.preventDefault(); }
     else if (e.key === 'ArrowUp') { p.power = Math.min(100, p.power + step); syncSliders(); e.preventDefault(); }
     else if (e.key === 'ArrowDown') { p.power = Math.max(0, p.power - step); syncSliders(); e.preventDefault(); }
     else if (e.key === ' ' || e.key === 'Enter') { fire(); e.preventDefault(); }
@@ -1382,6 +1411,7 @@ function shotKind(w) {
   if (w.scratch) return 'scratch';          // 스크래치탄
   if (w.magnet) return 'magnet';            // 자석탄
   if (w.freeze) return 'freeze';            // 빙결탄
+  if (w.teleport) return 'teleport';        // 순간이동탄
   if (w.gas) return 'gas';
   if (w.fire || w.scatter) return 'fire';   // 화염지대 / 네이팜
   if (w.homing) return 'missile';           // 유도탄
@@ -1482,6 +1512,14 @@ function drawFreezeShard(ctx) { // 얼음 결정 (+x)
   ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(0, -5.5); ctx.lineTo(-6, 0); ctx.lineTo(0, 5.5); ctx.closePath();
   ctx.fill(); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1; line(ctx, -3, 0, 6, 0);
+}
+function drawTeleport(ctx, time) { // 회전하는 보라 소용돌이
+  ctx.rotate((time || 0) * 6);
+  ctx.strokeStyle = '#b98cff'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < 22; i++) { const a = i * 0.5; const r = 0.62 * a; const px = Math.cos(a) * r, py = Math.sin(a) * r; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+  ctx.stroke();
+  ctx.fillStyle = '#e6d8ff'; ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, Math.PI * 2); ctx.fill();
 }
 function lightenHex(hex, amt) {
   const n = parseInt(hex.slice(1), 16);

@@ -21,10 +21,11 @@ export const SPECIALS = [
   { id: 'digger',  name: '굴착탄',     icon: '🕳', radius: 92,  damage: 12, desc: '지형을 크게 파내 추락 유도' },
   { id: 'storm',   name: '폭풍탄',     icon: '🌪', radius: 16,  damage: 8,  desc: '공중에서 12발로 광범위 분열', split: 12 },
   { id: 'magnet',  name: '자석탄',     icon: '🧲', radius: 120, damage: 10, desc: '착탄점으로 상대를 끌어당김(추락 유도)', magnet: true },
-  { id: 'freeze',  name: '빙결탄',     icon: '🧊', radius: 34,  damage: 24, desc: '명중 시 상대 다음 턴 이동 불가', freeze: true },
+  { id: 'freeze',  name: '빙결탄',     icon: '🧊', radius: 34,  damage: 24, desc: '명중 시 상대 다음 턴 이동·조준 불가', freeze: true },
+  { id: 'teleport',name: '순간이동탄', icon: '🌀', radius: 24,  damage: 0,  desc: '착탄 위치로 내 탱크가 순간이동', teleport: true },
   { id: 'homing',  name: '유도탄',     icon: '🛰', radius: 30,  damage: 30, desc: '정점 이후 상대 탱크를 추적', homing: true },
-  { id: 'fire',    name: '화염지대',   icon: '🌋', radius: 26,  damage: 16, desc: '착탄 지점이 3턴간 불타 지속 피해', fire: true },
-  { id: 'gas',     name: '독가스탄',   icon: '☠️', radius: 40,  damage: 0,  desc: '독가스 구름이 4턴간 머물며 지속 피해', gas: true },
+  { id: 'fire',    name: '화염지대',   icon: '🌋', radius: 38,  damage: 16, desc: '넓은 지역이 3턴간 불타 지속 피해', fire: true },
+  { id: 'gas',     name: '독가스탄',   icon: '☠️', radius: 56,  damage: 14, desc: '넓은 독가스 구름이 4턴간 지속 피해', gas: true },
   { id: 'rail',    name: '레일건',     icon: '⚡', radius: 18,  damage: 52, desc: '중력 무시 초고속 직사 저격(언덕은 못 넘음)', rail: true },
 ];
 
