@@ -99,6 +99,8 @@ export function mount(container) {
     crateMsg: null, // 획득 안내 { text, t }
     zones: [],   // 지속 지대(화염/독가스) [{x,y,r,kind,turns,dmg}]
     streamQueue: [], // 연속 발사(삼연포) 대기열 [{t,x,y,vx,vy,w}]
+    mapName: '',   // 이번 맵 프리셋 이름
+    mapMsgT: 0,    // 맵 이름 표시 잔여 시간
   };
 
   function makePlayer(i, x) {
@@ -120,6 +122,8 @@ export function mount(container) {
 
   function resetGame() {
     S.terrain = generateTerrain(WORLD_W, WORLD_H);
+    S.mapName = S.terrain.preset || '';
+    S.mapMsgT = 3.2;
     S.players = [makePlayer(0, WORLD_W * 0.12), makePlayer(1, WORLD_W * 0.88)];
     for (const p of S.players) settleTank(p, true);
     S.turn = 0;
@@ -316,7 +320,7 @@ export function mount(container) {
         const speed = Math.hypot(s.vx, s.vy) * 0.9;
         const base = Math.atan2(s.vy, s.vx);
         for (let k = 0; k < n; k++) {
-          const ang = base + (k - (n - 1) / 2) * 0.22;
+          const ang = base + (k - (n - 1) / 2) * 0.15;
           const c = makeShot(s.x, s.y, Math.cos(ang) * speed, Math.sin(ang) * speed,
             { ...s.w, split: 0 });
           c.armed = true;
@@ -599,6 +603,7 @@ export function mount(container) {
   function update(dt) {
     dt = Math.min(dt, 0.033);
     S.time += dt;
+    if (S.mapMsgT > 0) S.mapMsgT -= dt;
     if (S.crateMsg && (S.crateMsg.t -= dt) <= 0) S.crateMsg = null;
     if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 40);
     stepParticles(dt);
@@ -1120,6 +1125,12 @@ export function mount(container) {
       ctx.fillStyle = `rgba(127,208,255,${Math.min(1, S.crateMsg.t)})`;
       ctx.font = '800 18px sans-serif';
       ctx.fillText('📦 ' + S.crateMsg.text, W / 2, 62);
+    } else if (S.mapMsgT > 0 && S.mapName) {
+      // 맵 이름 (게임 시작 시 잠깐)
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(255,236,180,${Math.min(1, S.mapMsgT)})`;
+      ctx.font = '800 20px sans-serif';
+      ctx.fillText('🗺 ' + S.mapName, W / 2, 62);
     }
   }
 

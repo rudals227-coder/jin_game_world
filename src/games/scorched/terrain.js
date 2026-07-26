@@ -5,24 +5,49 @@
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// 여러 사인파를 합쳐 언덕/계곡 지형을 생성한다.
+// 맵 프리셋 — 매 게임 랜덤 선택. base=지표면 기준 높이(화면 비율, 클수록 아래),
+//   octaves/amp/freq*=사인파 굴곡, chasm=중앙 협곡, peaks=봉우리 개수, mesa=중앙 고원.
+const PRESETS = [
+  { name: '평원', base: 0.72, octaves: 2, amp: 0.045, freqBase: 0.7, freqRand: 1.0, freqStep: 0.9 },
+  { name: '구릉', base: 0.60, octaves: 4, amp: 0.13, freqBase: 1.2, freqRand: 2.0, freqStep: 1.6 },
+  { name: '험준한 협곡', base: 0.46, octaves: 4, amp: 0.16, freqBase: 1.8, freqRand: 2.6, freqStep: 2.0, chasm: true },
+  { name: '봉우리', base: 0.66, octaves: 3, amp: 0.07, freqBase: 1.0, freqRand: 1.4, freqStep: 1.2, peaks: 2 },
+  { name: '고원 요새', base: 0.68, octaves: 3, amp: 0.06, freqBase: 1.0, freqRand: 1.4, freqStep: 1.2, mesa: true },
+];
+
+// 가우시안 융기/함몰을 지형에 더한다. amp>0=아래로(함몰), amp<0=위로(융기).
+function addBump(ground, width, cx, w, amp) {
+  for (let x = 0; x < width; x++) {
+    const d = (x - cx) / w;
+    ground[x] += amp * Math.exp(-d * d);
+  }
+}
+
+// 여러 사인파 + 프리셋별 지형 특징을 합쳐 맵을 생성한다.
 export function generateTerrain(width, height, rng = Math.random) {
+  const preset = PRESETS[Math.floor(rng() * PRESETS.length)];
   const ground = new Float32Array(width);
-  const base = height * 0.6;
+  const base = height * preset.base;
   const waves = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < preset.octaves; i++) {
     waves.push({
-      amp: (height * 0.14) * (rng() * 0.7 + 0.3) / (i * 0.6 + 1),
-      len: width / (rng() * 2 + 1.2 + i * 1.6),
+      amp: (height * preset.amp) * (rng() * 0.6 + 0.4) / (i * 0.7 + 1),
+      len: width / (rng() * preset.freqRand + preset.freqBase + i * preset.freqStep),
       phase: rng() * Math.PI * 2,
     });
   }
   for (let x = 0; x < width; x++) {
     let y = base;
     for (const w of waves) y += Math.sin(x / w.len + w.phase) * w.amp;
-    ground[x] = clamp(y, height * 0.28, height * 0.9);
+    ground[x] = y;
   }
-  return { width, height, ground };
+  // 프리셋별 지형 특징
+  if (preset.chasm) addBump(ground, width, width * 0.5, width * 0.09, height * 0.44);            // 중앙 깊은 협곡
+  if (preset.mesa) addBump(ground, width, width * 0.5, width * 0.16, -height * 0.22);            // 중앙 고원
+  if (preset.peaks) for (let k = 0; k < preset.peaks; k++)
+    addBump(ground, width, width * (0.32 + rng() * 0.36), width * 0.06, -height * (0.18 + rng() * 0.12)); // 봉우리
+  for (let x = 0; x < width; x++) ground[x] = clamp(ground[x], height * 0.16, height * 0.92);
+  return { width, height, ground, preset: preset.name };
 }
 
 // 해당 x의 지표면 y (정수 열로 반올림).
