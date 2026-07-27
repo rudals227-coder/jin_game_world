@@ -98,6 +98,16 @@ export const games = [
     cover: airhockeyCover,
     load: () => import('./airhockey/index.js'),
   },
+  {
+    id: 'tictactoe',
+    title: '틱택토',
+    desc: '3개를 먼저 이으면 승리(2인/AI).',
+    tagline: '가로·세로·대각선으로 O나 X를 먼저 3개 잇는 사람이 승리! 둘이서 또는 AI(쉬움/어려움)와 대결하세요.',
+    tags: ['보드', '2인 대전', 'AI'],
+    accent: '#4dabf7',
+    cover: tictactoeCover,
+    load: () => import('./tictactoe/index.js'),
+  },
   // [비활성화] 배틀 아레나 — 나중에 다시 켜려면 이 블록 주석을 해제.
   // {
   //   id: 'battle',
@@ -532,6 +542,35 @@ function battleCover(uid = 'bt') {
     </g>
     ${wavy(280, 110, 60, '#2f9e5e')}
     <text x="200" y="128" text-anchor="middle" font-size="26" font-weight="900" fill="rgba(80,60,40,0.6)" font-family="'Comic Sans MS',sans-serif">VS</text>
+  </svg>`;
+}
+
+// 틱택토: 격자 + X/O 마크 몇 개(진행 중인 판 느낌).
+function tictactoeCover(uid = 'tt') {
+  const W = 400, H = 240, CX = '#4dabf7', CO = '#ff6b5a';
+  const size = 168, ox = (W - size) / 2, oy = (H - size) / 2, cell = size / 3;
+  let grid = '';
+  for (let k = 1; k < 3; k++) {
+    grid += `<line x1="${ox + k * cell}" y1="${oy + 8}" x2="${ox + k * cell}" y2="${oy + size - 8}" stroke="rgba(255,255,255,0.28)" stroke-width="5" stroke-linecap="round"/>`;
+    grid += `<line x1="${ox + 8}" y1="${oy + k * cell}" x2="${ox + size - 8}" y2="${oy + k * cell}" stroke="rgba(255,255,255,0.28)" stroke-width="5" stroke-linecap="round"/>`;
+  }
+  const cc = (i) => ({ x: ox + (i % 3) * cell + cell / 2, y: oy + Math.floor(i / 3) * cell + cell / 2 });
+  const drawX = (i, glow) => { const p = cc(i), r = cell * 0.26; return `<g stroke="${CX}" stroke-width="9" stroke-linecap="round"${glow ? ` filter="url(#g-${uid})"` : ''}><line x1="${p.x - r}" y1="${p.y - r}" x2="${p.x + r}" y2="${p.y + r}"/><line x1="${p.x + r}" y1="${p.y - r}" x2="${p.x - r}" y2="${p.y + r}"/></g>`; };
+  const drawO = (i) => { const p = cc(i), r = cell * 0.26; return `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="none" stroke="${CO}" stroke-width="9"/>`; };
+  // 예시 배치: X가 대각선 승리 직전 느낌
+  const marks = drawX(0, true) + drawO(1) + drawO(2) + drawX(4, true) + drawO(3) + drawX(8, true);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ttbg-${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#182130"/>
+        <stop offset="1" stop-color="#0a0d13"/>
+      </linearGradient>
+      <filter id="g-${uid}"><feGaussianBlur stdDeviation="2.2"/></filter>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#ttbg-${uid})"/>
+    ${grid}
+    ${marks}
+    <line x1="${cc(0).x}" y1="${cc(0).y}" x2="${cc(8).x}" y2="${cc(8).y}" stroke="${CX}" stroke-width="6" stroke-linecap="round" opacity="0.5"/>
   </svg>`;
 }
 
